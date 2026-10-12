@@ -6,6 +6,7 @@
   "description": "A 2D precision platformer built on h3-engine (see design/pixel-hop-gdd.md)",
   "scripts": {
     "start": "npx --yes serve -l 8080 .",
-    "test": "node test/physics.test.mjs"
+    "test": "node test/physics.test.mjs",
+    "check-levels": "node tools/check-levels.mjs"
   }
 }

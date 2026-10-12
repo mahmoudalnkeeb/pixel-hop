@@ -2,10 +2,10 @@ import { approach, Entity } from '../../vendor/h3-engine.min.js';
 import {
   ACCEL_AIR, ACCEL_GROUND, COYOTE_TIME, DEATH_TIME, DOWN, DROP_THROUGH_TIME, FLICKER_HZ, FRICTION, GRAVITY,
   INVULN_TIME, JUMP, JUMP_BUFFER, JUMP_CUT, JUMP_SPEED, KNOCKBACK_VX, KNOCKBACK_VY, LAND_SQUASH_SPEED, LEFT,
-  MAX_FALL, MAX_HEARTS, PLAYER_H, PLAYER_W, RIGHT, RUN_SPEED, SHAKE_HURT, T, WALL_COYOTE, WALL_JUMP_LOCK,
-  WALL_JUMP_VX, WALL_JUMP_VY, WALL_SLIDE_MAX,
+  MAX_FALL, MAX_HEARTS, PLAYER_H, PLAYER_W, RIGHT, RUN_SPEED, SHAKE_HURT, SPRING_SPEED, SWITCH_STOMP_SPEED, T,
+  UPDRAFT_MAX, WALL_COYOTE, WALL_JUMP_LOCK, WALL_JUMP_VX, WALL_JUMP_VY, WALL_SLIDE_MAX, WIND_DRIFT,
 } from '../config.js';
-import { characters, FRAMES } from '../art/characters.js';
+import { characters, FRAMES, GOLD } from '../art/characters.js';
 import { sfx } from '../sfx.js';
 
 const WALL_SLIDE_SFX_EVERY = 0.12;
@@ -18,12 +18,16 @@ export class Player extends Entity {
   /**
    * @param {number} x Tile-aligned spawn x.
    * @param {number} y Tile-aligned spawn y.
-   * @param {{ wallJump: boolean }} abilities
+   * @param {{ wallJump: boolean, maxHearts?: number, invincible?: boolean, golden?: boolean }} opts
    */
-  constructor(x, y, { wallJump }) {
+  constructor(x, y, { wallJump, maxHearts = MAX_HEARTS, invincible = false, golden = false }) {
     super({ x: x + (T - PLAYER_W) / 2, y: y + T - PLAYER_H, w: PLAYER_W, h: PLAYER_H, z: 5, tags: ['player'] });
     this.canWallJump = wallJump;
-    this.hearts = MAX_HEARTS;
+    this.maxHearts = maxHearts; // Assist Mode can raise this to 5 (§9.5)
+    this.invincible = invincible;
+    this.golden = golden; // "Golden Hop" palette, unlocked by all 27 gems
+    this.hearts = maxHearts;
+    this.groundSolid = null;
     this.state = 'play'; // 'play' | 'dying' | 'clear'
     this.stateTime = 0;
     this.onGround = false;
@@ -111,11 +115,29 @@ export class Player extends Entity {
       this.slideSfx = 0;
     }
 
+    // Wind (§4.2): horizontal zones drift Hop without fighting the run controller; updrafts lift him.
+    let drift = 0;
+    const winds = this.scene.winds;
+    if (winds) {
+      for (let i = 0; i < winds.length; i++) {
+        const w = winds[i];
+        if (!w.contains(this)) continue;
+        if (w.up) this.vel.y = Math.max(this.vel.y - w.force * dt, -UPDRAFT_MAX);
+        else drift += w.dir * w.force * WIND_DRIFT;
+      }
+    }
+
     const wasOnGround = this.onGround;
     const landingSpeed = this.vel.y;
+    this.vel.x += drift;
     const hit = level.moveAndCollide(this, dt);
+    if (this.vel.x !== 0) this.vel.x -= drift;
     this.onGround = hit.ground;
     this.platform = hit.platform;
+    this.groundSolid = hit.groundSolid;
+    // Switches: hit from below, or landed on hard (§4.1).
+    if (hit.ceilingSolid?.bump) hit.ceilingSolid.bump();
+    if (this.onGround && !wasOnGround && landingSpeed > SWITCH_STOMP_SPEED && hit.groundSolid?.bump) hit.groundSolid.bump();
     if (this.onGround) {
       this.chain = 0;
       if (!this.platform && level.fullySupported(this)) {
@@ -178,6 +200,12 @@ export class Player extends Entity {
    */
   hurt(fromX) {
     if (this.state !== 'play' || this.invuln > 0) return false;
+    if (this.invincible) {
+      this.vel.x = (this.cx >= fromX ? 1 : -1) * KNOCKBACK_VX;
+      this.bounce(KNOCKBACK_VY);
+      this.invuln = INVULN_TIME;
+      return false;
+    }
     const { audio } = this.scene.ctx;
     this.hearts--;
     this.scene.camera.shake(SHAKE_HURT, 0.2);
@@ -192,9 +220,19 @@ export class Player extends Entity {
     return true;
   }
 
+  /** Rising thornwater is fatal (Assist invincibility still saves him). */
+  drown() {
+    if (this.invincible) {
+      this.bounce(SPRING_SPEED);
+      return;
+    }
+    this.hearts = 0;
+    this._die();
+  }
+
   /** Pits cost a heart and put Hop back on the last solid ground he stood on (§3.4). */
   _fellInPit(audio) {
-    this.hearts--;
+    if (!this.invincible) this.hearts--;
     if (this.hearts <= 0) {
       this._die();
       return;
@@ -223,7 +261,7 @@ export class Player extends Entity {
   revive(x, y) {
     this.pos.set(x, y);
     this.vel.set(0, 0);
-    this.hearts = MAX_HEARTS;
+    this.hearts = this.maxHearts;
     this.state = 'play';
     this.invuln = 0;
     this.onGround = false;
@@ -236,14 +274,17 @@ export class Player extends Entity {
 
   /** Which expression to show this frame. */
   _frame() {
-    if (this.state === 'dying' || this.invuln > INVULN_TIME - 0.3) return FRAMES.hop_hurt;
-    if (this.sliding) return FRAMES.hop_slide;
-    if (!this.onGround) return this.vel.y < 0 ? FRAMES.hop_up : FRAMES.hop_down;
-    return this.anim % 3.2 > 3.05 ? FRAMES.hop_blink : FRAMES.hop_idle;
+    const gold = this.golden ? GOLD : 0;
+    if (this.state === 'dying' || this.invuln > INVULN_TIME - 0.3) return FRAMES.hop_hurt + gold;
+    if (this.sliding) return FRAMES.hop_slide + gold;
+    if (!this.onGround) return (this.vel.y < 0 ? FRAMES.hop_up : FRAMES.hop_down) + gold;
+    return (this.anim % 3.2 > 3.05 ? FRAMES.hop_blink : FRAMES.hop_idle) + gold;
   }
 
   render(r) {
-    if (this.invuln > 0 && this.state === 'play' && Math.floor(this.invuln * FLICKER_HZ * 2) % 2 === 1) return;
+    const blinking = this.invuln > 0 && this.state === 'play';
+    // Reduced flashing (§9.5): an outline instead of a 15 Hz flicker.
+    if (blinking && !this.reduceFlashing && Math.floor(this.invuln * FLICKER_HZ * 2) % 2 === 1) return;
     let sx = this.sx;
     let sy = this.sy;
     if (this.state === 'dying') {
@@ -263,5 +304,6 @@ export class Player extends Entity {
       h: Math.round(16 * sy),
       flipX: this.facing < 0,
     });
+    if (blinking && this.reduceFlashing) r.strokeRect(Math.round(this.pos.x) - 1.5, Math.round(this.pos.y) - 1.5, this.w + 3, this.h + 3, '#fff');
   }
 }

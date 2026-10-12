@@ -1,13 +1,16 @@
 import { Collision, lerp, Pool, Rect, Scene } from '../../vendor/h3-engine.min.js';
 import { SONGS } from '../audio/songs.js';
 import {
-  BOSS_ARENA_SILENCE, BOSS_HP, BUILT_LEVELS, CAMERA_LERP, CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP, CAMERA_OFFSET_Y,
+  BOSS_ARENA_SILENCE, BOSS_ASSIST_OFFER_DEATHS, BOSS_HP, BOSS_SLOWMO, BUILT_LEVELS, CAMERA_LERP, CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP, CAMERA_OFFSET_Y,
   CHAIN_SCORES, EXTRA_LEVELS, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
-  SCORE_TIME_BONUS, SHAKE_SCALE, SHAKE_STOMP, SPRING_SPEED, STOMP_BOUNCE, STOMP_BOUNCE_HELD, STOMP_REACH, T, VIEW_W,
+  SCORE_TIME_BONUS, SHAKE_SCALE, SHAKE_STOMP, SPRING_SPEED, STOMP_BOUNCE, STOMP_BOUNCE_HELD, STOMP_REACH, T,
+  THORNWATER_CAMERA_BIAS, VIEW_H, VIEW_W,
   WALL_JUMP_FROM_LEVEL, WORLDS,
 } from '../config.js';
-import { GloopKnight, Hopper, Slime } from '../entities/Enemy.js';
-import { KingGloop, Shockwave } from '../entities/KingGloop.js';
+import { Bat, Dropper, GloopKnight, Hopper, Puffer, Slime, Spore, Thornback } from '../entities/Enemy.js';
+import { Acorn, Cannon, CrumbleBlock, Crystal, Switch, Thornwater, WindZone } from '../entities/mechanics.js';
+import { Darkness } from '../world/Darkness.js';
+import { FallingRock, GooBlob, KingGloop, Shockwave, SunSeed } from '../entities/KingGloop.js';
 import { MovingPlatform } from '../entities/MovingPlatform.js';
 import { Particle } from '../entities/Particle.js';
 import { Coin, Gem, Heart } from '../entities/pickups.js';
@@ -25,7 +28,7 @@ const COIN_CHAIN_WINDOW = 0.4;
 const CLEAR_DELAY = 1.2;
 const PAUSE_DUCK = 0.7;
 const WATCHES = ['vel', 'state', 'ground', 'wall', 'hearts', 'boss'];
-const ENEMIES = { e: Slime, h: Hopper, k: GloopKnight };
+const ENEMIES = { e: Slime, h: Hopper, k: GloopKnight, t: Thornback, b: Bat, d: Dropper, p: Puffer };
 
 /** Next level in play order if it exists in this build. */
 const nextBuilt = (id) => {
@@ -65,8 +68,12 @@ export class PlayScene extends Scene {
     // Platforms first: they must move before anything that rides them.
     this.arena = null;
     this.boss = null;
+    this.winds = [];
+    this.thornwaters = [];
     for (const obj of this.def.objects ?? []) {
-      if (obj.type === 'platform') this.level.platforms.push(this.add(new MovingPlatform(obj)));
+      if (obj.type === 'wind') this.winds.push(this.add(new WindZone(obj)));
+      else if (obj.type === 'thornwater') this.thornwaters.push(this.add(new Thornwater(obj, this.level.h)));
+      else if (obj.type === 'platform') this.level.platforms.push(this.add(new MovingPlatform(obj)));
       else if (obj.type === 'sign') this.add(new Sign(obj.x * T, obj.y * T, obj.text));
       else if (obj.type === 'banner') this.add(new Banner(obj.x * T, obj.y * T));
       else if (obj.type === 'arena') {
@@ -78,10 +85,22 @@ export class PlayScene extends Scene {
     this.coinTotal = 0;
     this.gemTotal = 0;
     this.checkpoints = [];
+    this.crumbles = [];
+    this.acorns = new Pool(() => new Acorn(), 12);
+    this.spores = new Pool(() => new Spore(), 8);
+    const world = this.level.world;
     let start = null;
     for (const { ch, x, y } of this.level.spawns) {
       if (ch === 'P') start = { x, y };
       else if (ENEMIES[ch]) this.add(new ENEMIES[ch](x, y));
+      else if (ch === '=') {
+        const block = this.add(new CrumbleBlock(x, y, world));
+        this.level.solids.push(block);
+        this.crumbles.push(block);
+      }
+      else if (ch === 's') this.level.solids.push(this.add(new Switch(x, y, world)));
+      else if (ch === '*') this.add(new Crystal(x, y));
+      else if (ch === '<' || ch === '>') this.add(new Cannon(x, y, ch === '<' ? -1 : 1, this.acorns));
       else if (ch === 'o') {
         this.add(new Coin(x, y));
         this.coinTotal++;
@@ -98,8 +117,17 @@ export class PlayScene extends Scene {
     if (!start) throw new Error(`Level ${this.levelId} has no player start (P)`);
 
     const wallJump = this.def.abilities?.wallJump ?? Number(this.levelId) >= WALL_JUMP_FROM_LEVEL;
-    this.player = this.add(new Player(start.x, start.y, { wallJump }));
+    const assist = this.save.options.assist;
+    this.assisted = assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
+    this.player = this.add(
+      new Player(start.x, start.y, { wallJump, maxHearts: assist.hearts, invincible: assist.invincible, golden: this.save.golden === true }),
+    );
     this.add(new FakeWalls(this.level));
+    if (this.def.darkness) this.darkness = new Darkness(this.def.darkness);
+    this.timeScale = assist.speed;
+    this.reduceFlashing = this.save.options.flashing === 'reduced';
+    this.player.reduceFlashing = this.reduceFlashing;
+    this.slowMo = 0; // seconds of boss slow motion left
     this.respawnPoint = { x: this.player.pos.x, y: this.player.pos.y };
     this.checkpointIndex = -1;
 
@@ -122,6 +150,12 @@ export class PlayScene extends Scene {
     this._onSpring = (p, s) => this.touchSpring(p, s);
     this._onCheckpoint = (_p, c) => this.touchCheckpoint(c);
     this._onFlag = () => this.clearLevel();
+    this._onSeed = () => this.victory();
+    // Level 10 starts grey; taking the Sun Seed floods colour back in (§6.5).
+    this.colour = { fill: this.boss ? 0 : 1 };
+    this.captionText = '';
+    this.captionTime = 0;
+    this.assistOffered = false;
 
     this.camera.follow(this.player, { lerp: CAMERA_LERP, offsetY: CAMERA_OFFSET_Y });
     this.camera.setBounds(0, 0, this.level.w, this.level.h);
@@ -154,6 +188,7 @@ export class PlayScene extends Scene {
 
   update(dt, { input }) {
     if (this.state === 'play') this.time += dt;
+    if (this.captionTime > 0) this.captionTime -= dt;
     if (this.state === 'play' && (input.justPressed(PAUSE) || this.pauseOnReturn)) {
       this.pauseOnReturn = false;
       sfx('pause');
@@ -165,6 +200,9 @@ export class PlayScene extends Scene {
     // Look ahead in the facing direction so landings are visible before committing (§5.1).
     this.lookAhead = lerp(this.lookAhead, this.player.facing * CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP);
     this.camera.offsetX = this.fight === 'none' ? Math.round(this.lookAhead) : 0;
+    // Bias the camera upward while thornwater rises, keeping the water at the bottom edge (§5.4 level 9).
+    const rising = this.thornwaters.some((w) => w.rising && w.pos.y > w.stopY);
+    this.camera.offsetY = lerp(this.camera.offsetY, rising ? THORNWATER_CAMERA_BIAS : CAMERA_OFFSET_Y, 0.05);
 
     if (this.arena && this.fight === 'none' && this.player.pos.x > this.arena.x + 2 * T) this.enterArena();
 
@@ -174,6 +212,7 @@ export class PlayScene extends Scene {
     Collision.check(this, 'player', 'spring', this._onSpring);
     Collision.check(this, 'player', 'checkpoint', this._onCheckpoint);
     Collision.check(this, 'player', 'flag', this._onFlag);
+    Collision.check(this, 'player', 'seed', this._onSeed);
   }
 
   /** Stomp when falling onto the enemy's top; any other contact hurts (§4.3). */
@@ -185,13 +224,14 @@ export class PlayScene extends Scene {
     }
     const stomp = enemy.has('stompable') && p.vel.y > 0 && p.pos.y + p.h - enemy.pos.y < STOMP_REACH;
     if (!stomp) {
-      p.hurt(enemy.cx);
+      if (p.hurt(enemy.cx)) enemy.hitPlayer = true;
       return;
     }
     const { input } = this.ctx;
     enemy.onStomp();
     p.chain++;
-    this.score += Math.max(enemy.score, CHAIN_SCORES[Math.min(p.chain, CHAIN_SCORES.length) - 1]);
+    // Acorns bounce Hop but score nothing (§4.3).
+    if (enemy.score > 0) this.score += Math.max(enemy.score, CHAIN_SCORES[Math.min(p.chain, CHAIN_SCORES.length) - 1]);
     p.pos.y = enemy.pos.y - p.h;
     p.bounce(input.isDown(JUMP) ? STOMP_BOUNCE_HELD : STOMP_BOUNCE);
     this.camera.shake(SHAKE_STOMP, 0.15);
@@ -246,6 +286,35 @@ export class PlayScene extends Scene {
     this.burst(c.cx, c.pos.y + 10, '#ffe27a', 10, { speed: 50, up: 40, gravity: 40 });
   }
 
+  addScore(n) {
+    this.score += n;
+  }
+
+  fireSpore(x, y, vx, vy) {
+    this.add(this.spores.get().fire(x, y, vx, vy, this.spores));
+  }
+
+  /**
+   * Swap red and blue blocks. A block turning solid around Hop pushes him up; if he can't move up, he's crushed
+   * (levels are built so that never happens, §4.2).
+   */
+  toggleSwitchBlocks() {
+    const level = this.level;
+    const p = this.player;
+    level.toggleSwitchBlocks();
+    sfx('switch');
+    sfx('blocks_on');
+    this.camera.shake(1, 0.1);
+    if (!level.overlapsSolid(p)) return;
+    const y = p.pos.y;
+    for (let up = 1; up <= T; up++) {
+      p.pos.y = y - up;
+      if (!level.overlapsSolid(p)) return;
+    }
+    p.pos.y = y;
+    p.drown();
+  }
+
   // --- Boss arena (§6) ---
 
   /** Close the doors, lock the camera, 1.5 s of silence and a drone, then the roar (§8.3). */
@@ -258,12 +327,19 @@ export class PlayScene extends Scene {
     this.game.jukebox.stop(0.3);
     this.timer.after(BOSS_ARENA_SILENCE, () => {
       this.game.jukebox.play('music_drone');
-      this.fight = 'on';
-      this.boss.start(true);
+      this.game.scenes.push('boss_intro', { firstTime: !this.save.bossIntroSeen });
+      this.save.bossIntroSeen = true;
+      writeSave(this.save);
     });
   }
 
+  startFight() {
+    this.fight = 'on';
+    this.boss.start(true);
+  }
+
   onBossRoared() {
+    this.caption('[King Gloop bellows]');
     this.game.jukebox.play('music_boss');
   }
 
@@ -273,14 +349,84 @@ export class PlayScene extends Scene {
     sfx('shockwave');
   }
 
+  /** Phase 2: a Slime arcing from the King's mouth to land at `landX` (§6.3). */
+  spawnMinion(x, y, landX) {
+    const flight = 0.8;
+    const floorY = this.arena.y + this.arena.h - T;
+    const vy = (floorY - 10 - y - 0.5 * 900 * flight ** 2) / flight;
+    const slime = this.add(new Slime(x - 8, y - 6).launch((landX - x) / flight, vy));
+    slime.tag('minion').tag('boss_fx');
+  }
+
+  lobGoo(x, y, targetX) {
+    const floorY = this.arena.y + this.arena.h - T;
+    const clamped = Math.max(this.arena.x + 1.5 * T, Math.min(this.arena.x + this.arena.w - 1.5 * T, targetX));
+    this.add(new GooBlob(x, y, clamped, floorY));
+  }
+
+  /** Phase 3 wall slam: rocks in the given arena columns, each with a shadow tell. */
+  dropRocks(cols) {
+    const floorY = this.arena.y + this.arena.h - T;
+    for (const col of cols) this.add(new FallingRock(this.arena.x + col * T + T / 2, this.arena.y + T, floorY));
+    sfx('rock_tell');
+  }
+
+  /** Phase transitions (§6.3): a heart for phase 2; spikes, faster music and faster King for phase 3. */
+  onBossPhase(phase) {
+    this.phaseDeaths = 0;
+    this.assistOffered = false;
+    this.clearBossFx();
+    const ax = this.arena.x / T;
+    const floorRow = (this.arena.y + this.arena.h) / T - 2;
+    if (phase === 2) {
+      this.add(new Heart(this.arena.x + 3 * T, this.arena.y + 4 * T));
+      this.caption('[King Gloop roars: "GUARDS!"]');
+    } else if (phase === 3) {
+      for (const c of [1, 2, 17, 18]) this.level.setTile(ax + c, floorRow, '^');
+      this.game.jukebox.play('music_boss_final');
+      this.caption('[King Gloop throws a tantrum]');
+    }
+  }
+
+  clearBossFx() {
+    for (const e of this.find('boss_fx')) e.destroy();
+  }
+
+  /** Final hit: slow motion while he deflates (§6.3). */
   onBossBeaten() {
     this.fight = 'won';
-    for (const wave of this.find('shockwave')) wave.destroy();
+    this.clearBossFx();
+    this.slowMo = BOSS_SLOWMO;
     this.game.jukebox.stop(0.5);
   }
 
-  onBossDefeated() {
-    this.clearLevel();
+  onBossDefeated(x, y) {
+    this.add(new SunSeed(x, y));
+  }
+
+  /** Hop takes the Sun Seed: colour floods back across the screen, then the ending (§6.5). */
+  victory() {
+    if (this.state !== 'play') return;
+    this.state = 'victory';
+    this.player.state = 'clear';
+    for (const seed of this.find('seed')) seed.destroy();
+    this.game.jukebox.play('jingle_victory', { restart: true });
+    this.tween(this.colour, { fill: 1 }, 2.5, 'quadInOut');
+    const rec = this.record;
+    rec.cleared = true;
+    rec.bestTime = rec.bestTime === null ? this.time : Math.min(rec.bestTime, this.time);
+    rec.allCoins ||= this.coins === this.coinTotal;
+    rec.deaths = this.deaths;
+    this.save.bossBeaten = true;
+    writeSave(this.save);
+    this.timer.after(5, () => this.game.scenes.switch('ending', { time: this.time, deaths: this.deaths, assisted: this.assisted }));
+  }
+
+  /** Optional caption line for boss cues (§9.5). */
+  caption(text) {
+    if (!this.save.options.captions) return;
+    this.captionText = text;
+    this.captionTime = 2.5;
   }
 
   // --- Death and respawn ---
@@ -293,11 +439,18 @@ export class PlayScene extends Scene {
 
   /** Back to the last checkpoint with full hearts. Coins and gems collected since then are kept (§3.4). */
   respawn() {
+    if (this.fight === 'on' && this.phaseDeaths >= BOSS_ASSIST_OFFER_DEATHS && !this.assistOffered && !this.assisted) {
+      // After 5 deaths in one phase, offer Assist Mode once. Never force it (§6.4).
+      this.assistOffered = true;
+      this.game.scenes.push('assist');
+    }
     this.player.revive(this.respawnPoint.x, this.respawnPoint.y);
+    for (const water of this.thornwaters) water.reset();
+    for (const block of this.crumbles) block.reset();
     this.camera.snap();
     if (this.fight === 'on') {
       // Restart the current phase, skipping its intro (§6.4).
-      for (const wave of this.find('shockwave')) wave.destroy();
+      this.clearBossFx();
       this.boss.restartPhase();
       this.timer.after(1, () => this.boss.start(false));
     }
@@ -335,6 +488,7 @@ export class PlayScene extends Scene {
       deaths: this.deaths,
       score: this.score,
       timeBonus,
+      assisted: this.assisted,
     };
     this.timer.after(CLEAR_DELAY, () => this.game.scenes.push('clear', stats));
   }
@@ -345,9 +499,21 @@ export class PlayScene extends Scene {
     // Options may have changed while paused; nothing in the save is pending, so reload it.
     this.save = loadSave();
     this.record = levelRecord(this.save, this.levelId);
-    if (action === 'checkpoint') this.respawn();
+    if (action === 'boss_intro') this.startFight();
+    else if (action === 'assist') this.applyAssist();
+    else if (action === 'checkpoint') this.respawn();
     else if (action === 'restart') this.game.scenes.switch('play', { level: this.levelId });
     else if (action === 'map') this.game.scenes.switch('select', { level: this.levelId });
+  }
+
+  /** Assist Mode turned on mid-level (from the offer after repeated boss deaths). */
+  applyAssist() {
+    const assist = this.save.options.assist;
+    this.timeScale = assist.speed;
+    this.player.maxHearts = assist.hearts;
+    this.player.hearts = assist.hearts;
+    this.player.invincible = assist.invincible;
+    this.assisted = assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
   }
 
   dust(x, y, n) {
@@ -358,8 +524,29 @@ export class PlayScene extends Scene {
     for (let i = 0; i < n; i++) this.add(this.particles.get().spawn(x, y, color, this.particles, opts));
   }
 
+  /** Game speed: Assist Mode (§9.5) and boss slow motion (§6.3). Overrides the engine's private step; see docs. */
+  _step(dt) {
+    let scale = this.timeScale;
+    if (this.slowMo > 0) {
+      this.slowMo -= dt;
+      scale *= 0.3;
+    }
+    super._step(dt * scale);
+  }
+
   render(r) {
-    if (this.state === 'clear') return;
+    this.darkness?.render(r, this);
+    if (this.colour.fill < 1) {
+      // Hopshire is grey while the King holds the Sun Seed; colour sweeps back in from the left (§6.5).
+      const x = Math.round(this.colour.fill * VIEW_W);
+      r.rect(x, 0, VIEW_W - x, VIEW_H, 'rgba(112,96,80,0.45)');
+      if (this.colour.fill > 0) r.rect(x - 2, 0, 2, VIEW_H, 'rgba(255,240,180,0.8)');
+    }
+    if (this.captionTime > 0) {
+      r.rect(0, VIEW_H - 18, VIEW_W, 14, 'rgba(0,0,0,0.6)');
+      label(r, this.captionText, VIEW_W / 2, VIEW_H - 15);
+    }
+    if (this.state === 'clear' || this.state === 'victory') return;
     const hud = this.hud;
     hud.hearts = this.player.hearts;
     hud.coins = this.coins;

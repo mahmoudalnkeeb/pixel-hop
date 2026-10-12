@@ -35,14 +35,15 @@
       };
       await wait(300);
       if (new URLSearchParams(location.search).has('boss')) {
-        // Boss phase 1: walk into the arena, then stomp King Gloop each time he's Dazed.
+        // Full boss fight: walk into the arena, stomp King Gloop each time he's Dazed (6 hits, 3 phases),
+        // then take the Sun Seed and check the ending scene starts.
         const s = game.scenes.current;
         s.player.pos.set(s.arena.x + 3 * 16, s.arena.y + 9 * 16);
         const states = new Set();
-        for (let hit = 0; hit < 2; hit++) {
-          for (let i = 0; i < 300 && s.boss.state !== 'dazed'; i++) {
+        for (let hit = 0; hit < 6; hit++) {
+          for (let i = 0; i < 600 && s.boss.state !== 'dazed'; i++) {
             s.player.invuln = 5; // keep the test player alive while we wait
-            states.add(s.boss.state);
+            states.add(`${s.boss.phase}:${s.boss.state}`);
             await wait(50);
           }
           s.player.invuln = 0;
@@ -50,7 +51,13 @@
           s.player.vel.set(0, 100);
           await wait(400);
         }
-        await wait(4000);
+        for (let i = 0; i < 100 && !s.first('seed'); i++) await wait(50);
+        const seed = s.first('seed');
+        if (seed) {
+          await wait(800);
+          s.player.pos.set(seed.pos.x, seed.pos.y);
+        }
+        await wait(6500);
         seen.add([...states].join('>'));
         report();
       } else {

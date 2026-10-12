@@ -44,12 +44,37 @@ export const HOPPER_VX = 60;
 export const HOPPER_VY = 260;
 export const KNIGHT_SPEED = 35;
 export const KNIGHT_SPEED_BARE = 60;
+export const THORNBACK_SPEED = 40;
+export const BAT_SPEED = 40;
+export const BAT_AMPLITUDE = 16;
+export const BAT_PERIOD = 2;
+export const BAT_WAKE_RANGE = 6 * T;
+export const DROPPER_TELL = 0.35;
+export const DROPPER_GRAVITY = 2 * 900;
+export const SCORE_DROPPER_DODGED = 50;
+export const PUFFER_EVERY = 2.5;
+export const PUFFER_TELL = 0.4;
+export const PUFFER_RANGE = 10 * T;
+export const SPORE_SPEED = 80;
+export const ACORN_SPEED = 90;
+export const ACORN_INTERVAL = 2.0;
 export const CULL_MARGIN = 2 * T;
+
+// Mechanics (§4.2)
+export const CRUMBLE_SHAKE = 0.5;
+export const CRUMBLE_RESPAWN = 3;
+export const CRUMBLE_FADE = 0.2;
+export const SWITCH_COOLDOWN = 0.25;
+export const SWITCH_STOMP_SPEED = 100; // landing faster than this on a switch flips it
+export const WIND_DRIFT = 0.2; // horizontal wind moves Hop at force × this px/s
+export const UPDRAFT_MAX = 140; // fastest an updraft lifts Hop, px/s
+export const LIGHT_RADIUS = 72; // darkness cut-out around Hop (§4.2)
+export const CRYSTAL_RADIUS = 40;
+export const THORNWATER_CAMERA_BIAS = -40;
 
 // Boss: King Gloop (§6)
 export const BOSS_HP = 6;
 export const BOSS_PHASE_HP = [6, 4, 2, 0]; // HP at the start of phase 1, 2, 3, and at defeat
-export const BOSS_PHASES_BUILT = 1; // phases 2–3 land in M2; until then phase 1 ends the fight
 export const BOSS_TELL = 0.4;
 export const BOSS_AIR_TIME = 0.9;
 export const BOSS_HOP_PEAK = 4; // tiles
@@ -57,6 +82,14 @@ export const BOSS_DAZED = [2.0, 1.6, 1.4]; // per phase
 export const BOSS_HIT_BOUNCE = 360;
 export const BOSS_HIT_INVULN = 1.0;
 export const BOSS_ARENA_SILENCE = 1.5;
+export const BOSS_BELCH_TELL = 0.5;
+export const BOSS_GOO_EVERY = 1.8;
+export const BOSS_COURT_TIMEOUT = 10;
+export const BOSS_CHARGE_TELL = 0.6;
+export const BOSS_CHARGE_SPEED = 220;
+export const BOSS_PHASE3_SPEED = 1.25; // "everything runs ×1.25 faster"
+export const BOSS_SLOWMO = 0.8; // real seconds at ×0.3 on the final hit
+export const BOSS_ASSIST_OFFER_DEATHS = 5;
 export const SHOCKWAVE_SPEED = 120;
 
 // Scoring (§4.4)
@@ -82,7 +115,7 @@ export const SHAKE_SCALE = { on: 1, reduced: 0.5, off: 0 }; // options (§9.5)
 // All levels in play order (§5.3). `sandbox` is a test level reached with ?level=sandbox.
 export const LEVELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 // Levels whose files exist in this build; the rest show as "coming soon" on the map.
-export const BUILT_LEVELS = ['1', '2', '10'];
+export const BUILT_LEVELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 export const EXTRA_LEVELS = ['sandbox'];
 export const LEVEL_NAMES = [
   'Green Hills', 'Spike Valley', 'Bramble Woods', 'Sunken Ruins', 'Crystal Caves',

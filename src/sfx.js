@@ -5,6 +5,7 @@ const semis = (n) => 2 ** (n / 12);
 const jitter = (pct) => 1 + (Math.random() * 2 - 1) * pct;
 
 const RETRIGGER = 0.03; // same ID can't retrigger within 30 ms (§8.5)
+const RETRIGGER_FOR = { blocks_on: 0.1 }; // rate limits from §8.4
 
 // [freq, to, duration, type, volume, delay]
 const TONES = {
@@ -24,6 +25,16 @@ const TONES = {
   platform: [[140, undefined, 0.04, 'square', 0.04]],
   hopper_hop: [[250, 500, 0.08, 'square', 0.06]],
   stomp_armor: [[600, 300, 0.08, 'square', 0.15]],
+  crumble: [[90, 70, 0.5, 'sawtooth', 0.05]],
+  switch: [[880, 440, 0.1, 'square', 0.12], [440, 880, 0.1, 'square', 0.12, 0.1]],
+  blocks_on: [[330, undefined, 0.06, 'square', 0.08]],
+  bat_wake: [[1500, 2000, 0.1, 'square', 0.06]],
+  dropper_tell: [[2000, 1800, 0.35, 'triangle', 0.05]],
+  dropper_crash: [[400, 60, 0.2, 'sawtooth', 0.12]],
+  puffer_tell: [[200, 500, 0.4, 'sine', 0.08]],
+  spore: [[700, 350, 0.08, 'square', 0.07]],
+  cannon: [[120, 60, 0.12, 'square', 0.12]],
+  thornwater: [[90, 70, 0.3, 'sine', 0.06]],
   ui_move: [[660, undefined, 0.03, 'square', 0.06]],
   ui_confirm: [[660, 990, 0.06, 'square', 0.08]],
   ui_back: [[990, 660, 0.06, 'square', 0.08]],
@@ -36,6 +47,14 @@ const TONES = {
   boss_dazed: [[1200, 1500, 0.1, 'triangle', 0.1], [1500, 1200, 0.1, 'triangle', 0.1, 0.1], [1200, 1500, 0.1, 'triangle', 0.1, 0.2]],
   boss_hit: [[160, 60, 0.25, 'square', 0.2], [220, 80, 0.12, 'square', 0.15]],
   boss_defeat: [[400, 40, 2.0, 'sawtooth', 0.2]],
+  boss_belch: [[90, 200, 0.5, 'sawtooth', 0.15]],
+  goo_lob: [[400, 250, 0.15, 'sine', 0.1]],
+  goo_splash: [[200, 60, 0.15, 'square', 0.1]],
+  boss_tell_charge: [[60, 90, 0.6, 'sawtooth', 0.15]],
+  boss_charge: [[100, undefined, 0.6, 'square', 0.12]],
+  wall_slam: [[60, 30, 0.5, 'square', 0.25]],
+  rock_tell: [[1800, 1600, 0.6, 'triangle', 0.05]],
+  seed: [[523, 1047, 0.3, 'triangle', 0.15], [784, 1568, 0.3, 'triangle', 0.15, 0.15], [1047, 2093, 0.5, 'triangle', 0.15, 0.3]],
 };
 
 const BUS = { ui_move: 'ui', ui_confirm: 'ui', ui_back: 'ui', pause: 'ui' };
@@ -62,7 +81,7 @@ export const sfx = (id, { semitones = 0, volume = 1 } = {}) => {
   const ctx = mixer?.ctx;
   if (!ctx) return;
   const now = ctx.currentTime;
-  if (now - (lastPlayed.get(id) ?? -1) < RETRIGGER) return;
+  if (now - (lastPlayed.get(id) ?? -1) < (RETRIGGER_FOR[id] ?? RETRIGGER)) return;
   const tones = TONES[id];
   const length = Math.max(...tones.map((t) => t[2] + (t[5] ?? 0)));
   if (LIMIT[id]) {

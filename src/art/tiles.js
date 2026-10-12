@@ -14,6 +14,14 @@ export const TILE = {
   spikes: 6,
   fakeTop: 7,
   fakeInner: 8,
+  redOn: 9,
+  redOff: 10,
+  blueOn: 11,
+  blueOff: 12,
+  cannonL: 13,
+  cannonR: 14,
+  crumble: 15,
+  switchBlock: 16,
 };
 
 /** Lighten (amt > 0) or darken (amt < 0) a #rrggbb colour. */
@@ -91,6 +99,57 @@ const spikes = (ctx, ox) => {
   }
 };
 
+// Switch blocks differ by pattern as well as colour (§9.5): dots for red, stripes for blue.
+const switchBlock = (ctx, ox, color, dark, pattern, on) => {
+  if (!on) {
+    for (let i = 0; i < 16; i += 4) {
+      px(ctx, ox + i, 0, 2, 1, color);
+      px(ctx, ox + i + 2, 15, 2, 1, color);
+      px(ctx, ox, i + 2, 1, 2, color);
+      px(ctx, ox + 15, i, 1, 2, color);
+    }
+    return;
+  }
+  px(ctx, ox, 0, 16, 16, dark);
+  px(ctx, ox + 1, 1, 14, 14, color);
+  if (pattern === 'dots') for (const [x, y] of [[4, 4], [10, 4], [7, 7], [4, 10], [10, 10]]) px(ctx, ox + x, y, 2, 2, dark);
+  else for (let i = 2; i < 14; i += 4) px(ctx, ox + 2, i, 12, 2, dark);
+  px(ctx, ox + 1, 1, 14, 1, 'rgba(255,255,255,0.5)');
+};
+
+const cannon = (ctx, ox, dir) => {
+  px(ctx, ox, 0, 16, 16, '#5a4a3a');
+  px(ctx, ox + 1, 1, 14, 14, '#7d6650');
+  px(ctx, ox + 1, 1, 14, 2, '#9c8266');
+  // Barrel.
+  const bx = dir < 0 ? 0 : 6;
+  px(ctx, ox + bx, 4, 10, 8, '#2b2b35');
+  px(ctx, ox + bx + (dir < 0 ? 0 : 8), 5, 2, 6, '#111');
+  px(ctx, ox + bx + 2, 4, 6, 1, '#555c6b');
+};
+
+const crumbleBlock = (ctx, ox, pal) => {
+  px(ctx, ox, 0, 16, 16, shade(pal.ground, -0.15));
+  px(ctx, ox + 1, 1, 14, 14, shade(pal.ground, 0.1));
+  const c = shade(pal.ground, -0.5);
+  px(ctx, ox + 4, 1, 1, 5, c);
+  px(ctx, ox + 5, 6, 3, 1, c);
+  px(ctx, ox + 8, 6, 1, 5, c);
+  px(ctx, ox + 9, 11, 4, 1, c);
+  px(ctx, ox + 12, 3, 1, 4, c);
+  px(ctx, ox + 2, 10, 4, 1, c);
+};
+
+const switchTile = (ctx, ox) => {
+  px(ctx, ox, 0, 16, 16, '#3a3040');
+  px(ctx, ox + 1, 1, 14, 14, '#ffd23f');
+  px(ctx, ox + 1, 1, 14, 2, '#fff3b0');
+  // A red/blue toggle arrow.
+  px(ctx, ox + 4, 5, 4, 6, '#e8434f');
+  px(ctx, ox + 8, 5, 4, 6, '#3d7be8');
+  px(ctx, ox + 1, 14, 14, 1, '#c99a12');
+};
+
 const sheets = new Map();
 
 /** The world's tile SpriteSheet, painted on first use. */
@@ -107,6 +166,14 @@ export const tiles = (world) => {
     spikes,
     (ctx, ox) => (dirt(ctx, ox, pal, 1), grass(ctx, ox, pal, 0), crack(ctx, ox, pal)),
     (ctx, ox) => (dirt(ctx, ox, pal, 3), crack(ctx, ox, pal)),
+    (ctx, ox) => switchBlock(ctx, ox, '#e8434f', '#8a1f2a', 'dots', true),
+    (ctx, ox) => switchBlock(ctx, ox, '#e8434f', '#8a1f2a', 'dots', false),
+    (ctx, ox) => switchBlock(ctx, ox, '#3d7be8', '#1b3f8a', 'stripes', true),
+    (ctx, ox) => switchBlock(ctx, ox, '#3d7be8', '#1b3f8a', 'stripes', false),
+    (ctx, ox) => cannon(ctx, ox, -1),
+    (ctx, ox) => cannon(ctx, ox, 1),
+    (ctx, ox) => crumbleBlock(ctx, ox, pal),
+    switchTile,
   ];
   const image = canvas(16 * painters.length, 16, (ctx) => painters.forEach((paint, i) => paint(ctx, i * 16)));
   const sheet = new SpriteSheet(image, { frameW: 16, frameH: 16 });

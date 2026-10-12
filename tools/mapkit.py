@@ -11,6 +11,17 @@ class Grid:
             for c in range(c0, c1 + 1):
                 self.g[r][c] = ch
 
+    def ground(self, c0, c1, top, ch='#'):
+        """Solid from row `top` to the bottom of the map."""
+        self.fill(c0, c1, top, len(self.g) - 1, ch)
+
+    def clear(self, c0, c1, r0, r1):
+        self.fill(c0, c1, r0, r1, '.')
+
+    def coins(self, cells):
+        for c, r in cells:
+            self.g[r][c] = 'o'
+
     def put(self, c, r, ch):
         self.g[r][c] = ch
 

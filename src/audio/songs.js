@@ -48,8 +48,29 @@ const THEME_B = [
 const ROOTS_G = ['G2', 'C3', 'E2', 'D2', 'G2', 'C3', 'G2', 'D2'];
 const CHORDS_G = [['G4', 'B4', 'D5'], ['C4', 'E4', 'G4'], ['E4', 'G4', 'B4'], ['D4', 'F#4', 'A4']];
 
+// Main theme in natural minor (E minor), for the darker worlds.
+const THEME_MINOR = [
+  'E4 . G4 . B4 - - . G4 . B4 . E5 - - .',
+  'D5 - C5 - B4 - G4 - A4 - B4 - C5 - - .',
+  'B4 - G4 - E4 - G4 . F#4 - E4 - C4 - - .',
+  'B3 - E4 - F#4 - G4 - F#4 - - - E4 - - -',
+];
+/** Stretch every note to twice its length: the theme "in half time" (§8.3 music_sky). */
+const halfTime = (bars) =>
+  bars.flatMap((bar) => {
+    const doubled = bar.split(' ').flatMap((tok) => (tok === '.' ? ['.', '.'] : tok === '-' ? ['-', '-'] : [tok, '-']));
+    return [doubled.slice(0, 16).join(' '), doubled.slice(16).join(' ')];
+  });
+
 const BEAT = 'k . h . s . h . k . h k s . h h';
 const HATS = 'k . h . h . h . k . h . h . h .';
+
+const BOSS_LEAD = [
+  'C5 . C5 . Eb5 - C5 - G4 - - - Ab4 - G4 -',
+  'F4 - Ab4 - G4 - Eb4 - D4 - Eb4 - C4 - - -',
+  'C5 . C5 . Eb5 - G5 - F5 - Eb5 - D5 - Eb5 -',
+  'C5 - G4 - Ab4 - B4 - C5 - - - . . . .',
+];
 
 export const SONGS = {
   music_title: {
@@ -92,16 +113,70 @@ export const SONGS = {
       {
         wave: 'square',
         volume: 0.055,
-        bars: [
-          'C5 . C5 . Eb5 - C5 - G4 - - - Ab4 - G4 -',
-          'F4 - Ab4 - G4 - Eb4 - D4 - Eb4 - C4 - - -',
-          'C5 . C5 . Eb5 - G5 - F5 - Eb5 - D5 - Eb5 -',
-          'C5 - G4 - Ab4 - B4 - C5 - - - . . . .',
-        ],
+        bars: BOSS_LEAD,
       },
       { wave: 'square', volume: 0.05, bars: ['C3', 'F3', 'C3', 'G3'].map(oomPah) },
       { wave: 'triangle', volume: 0.12, bars: ['C2', 'F2', 'C2', 'G2'].map(hold) },
       { wave: 'noise', volume: 0.6, bars: rep('k . h . s . h . k k h . s . h s', 4) },
+    ],
+  },
+  // Phase 3: the same theme a semitone up, faster, with full drums.
+  music_boss_final: {
+    bpm: 185,
+    tracks: [
+      { wave: 'square', volume: 0.055, bars: tr(BOSS_LEAD, 1) },
+      { wave: 'square', volume: 0.05, bars: ['C#3', 'F#3', 'C#3', 'G#3'].map(oomPah) },
+      { wave: 'triangle', volume: 0.12, bars: ['C#2', 'F#2', 'C#2', 'G#2'].map(hold) },
+      { wave: 'noise', volume: 0.7, bars: rep('k h s h k k s h k h s h k k s s', 4) },
+    ],
+  },
+  // Earthy and curious; quotes the main theme in minor (D Dorian colour from the B natural in the arps).
+  music_woods: {
+    bpm: 128,
+    tracks: [
+      { wave: 'square', volume: 0.045, bars: tr(THEME_MINOR, -2) },
+      { wave: 'triangle', volume: 0.05, bars: [['D4', 'F4', 'A4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4'], ['A3', 'C4', 'E4']].map(arp) },
+      { wave: 'triangle', volume: 0.16, bars: ['D2', 'C2', 'G2', 'A2'].map(bounce) },
+      { wave: 'noise', volume: 0.45, bars: rep('k . . h s . . h k . h . s . . h', 4) },
+    ],
+  },
+  // Sparse and echoey: slow triangle, droplet arps, almost no drums.
+  music_caves: {
+    bpm: 96,
+    tracks: [
+      {
+        wave: 'triangle',
+        volume: 0.08,
+        bars: [
+          'A4 - - - . . E5 - - - . . C5 - - -',
+          'B4 - - - . . G4 - - - . . E4 - - -',
+          'F4 - - - . . A4 - - - . . C5 - - -',
+          'B4 - - - . . G#4 - - - . . E4 - - -',
+        ],
+      },
+      { wave: 'sine', volume: 0.04, bars: rep('. . . . E6 . . . . . . . . . B5 .', 2).concat(rep('. . C6 . . . . . . . A5 . . . . .', 2)) },
+      { wave: 'triangle', volume: 0.14, bars: ['A2', 'G2', 'F2', 'E2'].map(hold) },
+      { wave: 'noise', volume: 0.25, bars: rep('k . . . . . . . . . h . . . . .', 4) },
+    ],
+  },
+  // Soaring, with a fast arpeggio bed; the main theme returns in half time.
+  music_sky: {
+    bpm: 150,
+    tracks: [
+      { wave: 'square', volume: 0.05, bars: halfTime(tr(THEME, -4)) },
+      { wave: 'square', volume: 0.02, bars: [...CHORDS_G, ...CHORDS_G].map((c) => arp(c.map((n) => shift(n, -4)))) },
+      { wave: 'triangle', volume: 0.16, bars: ROOTS_G.map((n) => bounce(shift(n, -4))) },
+      { wave: 'noise', volume: 0.5, bars: rep('k . h h s . h . k . h h s . h h', 8) },
+    ],
+  },
+  // Driving and tense: double-time hats, minor theme, low pulse bass.
+  music_keep: {
+    bpm: 160,
+    tracks: [
+      { wave: 'square', volume: 0.05, bars: THEME_MINOR },
+      { wave: 'square', volume: 0.04, bars: ['E2', 'C2', 'D2', 'B1'].map((n) => `${n} ${n} . ${n} ${n} . ${n} ${n} . ${n} ${n} . ${n} . ${n} ${n}`) },
+      { wave: 'triangle', volume: 0.14, bars: ['E2', 'C2', 'D2', 'B1'].map(hold) },
+      { wave: 'noise', volume: 0.6, bars: rep('k h h h s h h h k h k h s h h h', 4) },
     ],
   },
   jingle_clear: {
@@ -110,6 +185,31 @@ export const SONGS = {
     tracks: [
       { wave: 'square', volume: 0.07, bars: ['G4 B4 D5 G5 B4 D5 G5 B5 D6 - - - - - - -', '. . . . . . . . . . . . . . . .'] },
       { wave: 'triangle', volume: 0.18, bars: ['G2 - - - D3 - - - G3 - - - - - - -', '. . . . . . . . . . . . . . . .'] },
+    ],
+  },
+  // Boss defeated: the main theme as a triumphant major cadence (~6 s).
+  jingle_victory: {
+    bpm: 120,
+    loop: false,
+    tracks: [
+      {
+        wave: 'square',
+        volume: 0.07,
+        bars: tr(['G4 . B4 . D5 - - . B4 . D5 . G5 - - .', 'F#5 - E5 - D5 - B4 - C5 - D5 - E5 - - .', 'D5 - F#5 - A5 - - - G5 - - - - - - -'], 5),
+      },
+      { wave: 'triangle', volume: 0.06, bars: tr([arp(CHORDS_G[0]), arp(CHORDS_G[1]), arp(CHORDS_G[3])], 5) },
+      { wave: 'triangle', volume: 0.18, bars: ['C3', 'F2', 'G2'].map(hold) },
+      { wave: 'noise', volume: 0.5, bars: ['k . h . s . h . k . h . s . h .', 'k . h . s . h . k . h . s . h .', 'k . . . . . . . . . . . . . . .'] },
+    ],
+  },
+  // Credits / True Ending: the main theme, gentle and fully arranged.
+  music_credits: {
+    bpm: 120,
+    tracks: [
+      { wave: 'square', volume: 0.04, bars: [...THEME, ...THEME_B] },
+      { wave: 'triangle', volume: 0.05, bars: [...CHORDS_G, ...CHORDS_G].map(arp) },
+      { wave: 'triangle', volume: 0.15, bars: ROOTS_G.map(hold) },
+      { wave: 'noise', volume: 0.3, bars: rep(HATS, 8) },
     ],
   },
 };

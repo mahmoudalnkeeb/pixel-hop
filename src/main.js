@@ -3,7 +3,10 @@ import { Jukebox } from './audio/Jukebox.js';
 import { Mixer } from './audio/Mixer.js';
 import { BUILT_LEVELS, EXTRA_LEVELS, VIEW_H, VIEW_W, WORLDS } from './config.js';
 import { loadSave } from './save.js';
+import { AssistScene } from './scenes/AssistScene.js';
+import { BossIntroScene } from './scenes/BossIntroScene.js';
 import { ClearScene } from './scenes/ClearScene.js';
+import { EndingScene } from './scenes/EndingScene.js';
 import { OptionsScene } from './scenes/OptionsScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { PlayScene } from './scenes/PlayScene.js';
@@ -40,7 +43,10 @@ game.scenes
   .add('play', PlayScene)
   .add('pause', PauseScene)
   .add('options', OptionsScene)
-  .add('clear', ClearScene);
+  .add('clear', ClearScene)
+  .add('boss_intro', BossIntroScene)
+  .add('assist', AssistScene)
+  .add('ending', EndingScene);
 
 if (level && [...BUILT_LEVELS, ...EXTRA_LEVELS].includes(level)) game.start('play', { level });
 else game.start('title');
