@@ -1,5 +1,6 @@
 import { Scene } from '../../vendor/h3-engine.min.js';
 import { PAUSE, VIEW_H, VIEW_W } from '../config.js';
+import { loadSave } from '../save.js';
 import { sfx } from '../sfx.js';
 import { label } from '../ui/label.js';
 import { Menu } from '../ui/Menu.js';
@@ -14,6 +15,8 @@ export class PauseScene extends Scene {
       { text: 'Options', value: 'options' },
       { text: 'Quit to map', value: 'map' },
     ]);
+    // Assist Mode "skip level" (§9.5) appears only when the toggle is on.
+    if (loadSave().options.assist?.skip) this.menu.items.splice(3, 0, { text: 'Skip level (Assist)', value: 'skip' });
   }
 
   update(_dt, ctx) {

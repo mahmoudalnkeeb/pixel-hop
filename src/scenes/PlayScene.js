@@ -18,6 +18,7 @@ import { Player } from '../entities/Player.js';
 import { Banner, Checkpoint, Flag, Sign, Spring } from '../entities/props.js';
 import { levelRecord, loadSave, writeSave } from '../save.js';
 import { sfx } from '../sfx.js';
+import { Run } from '../telemetry.js';
 import { drawHud } from '../ui/hud.js';
 import { label } from '../ui/label.js';
 import { Backdrop } from '../world/Backdrop.js';
@@ -131,6 +132,7 @@ export class PlayScene extends Scene {
     this.respawnPoint = { x: this.player.pos.x, y: this.player.pos.y };
     this.checkpointIndex = -1;
 
+    this.run = new Run(this.levelId); // playtest telemetry (§11)
     this.state = 'play'; // 'play' | 'clear'
     this.fight = 'none'; // 'none' | 'silence' | 'on' | 'won'
     this.time = 0;
@@ -182,12 +184,17 @@ export class PlayScene extends Scene {
   }
 
   exit() {
+    // Leaving mid-level (restart, quit) still counts as a run for the playtest data.
+    if (this.state === 'play') this.run.finish(false, this.assisted);
     document.removeEventListener('visibilitychange', this._onVisibility);
     for (const w of WATCHES) this.ctx.game.debug.unwatch(w);
   }
 
   update(dt, { input }) {
-    if (this.state === 'play') this.time += dt;
+    if (this.state === 'play') {
+      this.time += dt;
+      this.run.tick(dt);
+    }
     if (this.captionTime > 0) this.captionTime -= dt;
     if (this.state === 'play' && (input.justPressed(PAUSE) || this.pauseOnReturn)) {
       this.pauseOnReturn = false;
@@ -281,6 +288,7 @@ export class PlayScene extends Scene {
     for (const other of this.checkpoints) other.lit = false;
     c.lit = true;
     this.checkpointIndex = index;
+    this.run.checkpoint();
     this.respawnPoint = { x: c.spawnX, y: c.spawnY };
     sfx('checkpoint');
     this.burst(c.cx, c.pos.y + 10, '#ffe27a', 10, { speed: 50, up: 40, gravity: 40 });
@@ -407,6 +415,7 @@ export class PlayScene extends Scene {
   /** Hop takes the Sun Seed: colour floods back across the screen, then the ending (§6.5). */
   victory() {
     if (this.state !== 'play') return;
+    this.run.finish(true, this.assisted);
     this.state = 'victory';
     this.player.state = 'clear';
     for (const seed of this.find('seed')) seed.destroy();
@@ -433,6 +442,7 @@ export class PlayScene extends Scene {
 
   onPlayerDied() {
     this.deaths++;
+    this.run.death();
     if (this.fight === 'on') this.phaseDeaths++;
     this.burst(this.player.cx, this.player.cy, '#ff5e5b', 14);
   }
@@ -458,6 +468,7 @@ export class PlayScene extends Scene {
 
   clearLevel() {
     if (this.state !== 'play') return;
+    this.run.finish(true, this.assisted);
     this.state = 'clear';
     this.player.state = 'clear';
     this.game.jukebox.play('jingle_clear', { restart: true });
@@ -504,6 +515,19 @@ export class PlayScene extends Scene {
     else if (action === 'checkpoint') this.respawn();
     else if (action === 'restart') this.game.scenes.switch('play', { level: this.levelId });
     else if (action === 'map') this.game.scenes.switch('select', { level: this.levelId });
+    else if (action === 'skip') this.skipLevel();
+  }
+
+  /** Assist "skip level": counts as a clear (marked assisted); skipping the boss goes straight to the victory. */
+  skipLevel() {
+    this.assisted = true;
+    if (this.boss) {
+      this.clearBossFx();
+      this.boss.state = 'gone';
+      this.victory();
+    } else {
+      this.clearLevel();
+    }
   }
 
   /** Assist Mode turned on mid-level (from the offer after repeated boss deaths). */

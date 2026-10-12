@@ -19,6 +19,10 @@ node test/run-smoke.mjs 1             # run right through level 1, pause, clear
 node test/run-smoke.mjs 10 60 '' boss # scripted King Gloop phase 1
 ```
 
+Playtesting (§11): with `&debug`, press **F9** to download telemetry (deaths and time per checkpoint segment), then `node tools/telemetry-report.mjs <files>` flags segments with median deaths > 8 or time > 2× par.
+
+Touch: on-screen buttons appear on the first touch. Keys can be remapped under Options → Controls.
+
 Levels 2–10 are generated: edit `tools/build_levels.py`, run `python3 tools/build_levels.py`, then `npm run check-levels`.
 
 ## Layout

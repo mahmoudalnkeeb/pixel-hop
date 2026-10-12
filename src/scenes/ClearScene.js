@@ -56,6 +56,11 @@ export class ClearScene extends Scene {
     r.strokeRect(60.5, y + 20.5, 199, 139, '#ffd23f');
     label(r, 'LEVEL CLEAR!', cx, y + 28, { size: 16, color: '#ffd23f' });
     label(r, s.name ?? `Level ${s.levelId}`, cx, y + 46);
+    if (s.assisted) {
+      // Small assist icon, for transparency only (§9.5).
+      r.rect(236, y + 26, 16, 12, '#3d7be8');
+      label(r, 'A', 244, y + 28);
+    }
     const rows = this.rows;
     const shown = Math.floor(this.panel.shown);
     for (let i = 0; i < Math.min(shown, rows.length); i++) label(r, rows[i], 80, y + 64 + i * ROW, { align: 'left' });
