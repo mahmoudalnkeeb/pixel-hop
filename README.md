@@ -1,5 +1,7 @@
 # Pixel Hop
 
+**Play it:** https://mahmoudalnkeeb.github.io/pixel-hop/
+
 2D precision platformer on [h3-engine](https://github.com/mahmoudalnkeeb/h3-engine) v0.2.0 (vendored in `vendor/`). Design: `design/pixel-hop-gdd.md`.
 
 ## Run
@@ -8,7 +10,11 @@
 npm start            # static server on http://localhost:8080
 npm test             # headless physics checks against GDD §3.2/§3.3
 npm run check-levels # proves every flag and Sun Gem is reachable, using the real player physics
+npm run release      # dist/ build with import and 6 MB budget checks
+npm run deploy       # tests + level checker + release, then publishes dist/ to the gh-pages branch
 ```
+
+Release status against the GDD §12 checklist: `docs/acceptance.md`.
 
 Dev URLs: `?level=1`, `?level=2`, `?level=10` (boss), `?level=sandbox` (every ability in one level), `&debug` (overlay, toggle with `` ` ``; exposes `window.game` and unlocks every built level on the map).
 

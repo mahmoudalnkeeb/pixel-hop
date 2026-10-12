@@ -7,6 +7,8 @@
   "scripts": {
     "start": "npx --yes serve -l 8080 .",
     "test": "node test/physics.test.mjs",
-    "check-levels": "node tools/check-levels.mjs"
+    "check-levels": "node tools/check-levels.mjs",
+    "release": "node tools/release.mjs",
+    "deploy": "bash tools/deploy-pages.sh"
   }
 }
