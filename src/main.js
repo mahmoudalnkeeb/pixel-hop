@@ -7,7 +7,9 @@ import { AssistScene } from './scenes/AssistScene.js';
 import { BossIntroScene } from './scenes/BossIntroScene.js';
 import { ClearScene } from './scenes/ClearScene.js';
 import { EndingScene } from './scenes/EndingScene.js';
-import { OptionsScene } from './scenes/OptionsScene.js';
+import { ControlsScene } from './scenes/ControlsScene.js';
+import { AssistOptionsScene, OptionsScene } from './scenes/OptionsScene.js';
+import { applyKeys } from './input/controls.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { PlayScene } from './scenes/PlayScene.js';
 import { SelectScene } from './scenes/SelectScene.js';
@@ -36,6 +38,7 @@ game.jukebox = new Jukebox(game.mixer);
 initSfx(game.mixer);
 const { options } = loadSave();
 for (const bus of ['music', 'sfx', 'ui']) game.mixer.setLevel(bus, options[bus]);
+applyKeys(options.keys);
 
 game.scenes
   .add('title', TitleScene)
@@ -43,6 +46,8 @@ game.scenes
   .add('play', PlayScene)
   .add('pause', PauseScene)
   .add('options', OptionsScene)
+  .add('assist_options', AssistOptionsScene)
+  .add('controls', ControlsScene)
   .add('clear', ClearScene)
   .add('boss_intro', BossIntroScene)
   .add('assist', AssistScene)
