@@ -40,7 +40,24 @@ export const LAND_SQUASH_SPEED = 150;
 // Enemies (§4.3)
 export const STOMP_REACH = 8; // px; feet must be less than this below the enemy's top
 export const SLIME_SPEED = 30;
+export const HOPPER_VX = 60;
+export const HOPPER_VY = 260;
+export const KNIGHT_SPEED = 35;
+export const KNIGHT_SPEED_BARE = 60;
 export const CULL_MARGIN = 2 * T;
+
+// Boss: King Gloop (§6)
+export const BOSS_HP = 6;
+export const BOSS_PHASE_HP = [6, 4, 2, 0]; // HP at the start of phase 1, 2, 3, and at defeat
+export const BOSS_PHASES_BUILT = 1; // phases 2–3 land in M2; until then phase 1 ends the fight
+export const BOSS_TELL = 0.4;
+export const BOSS_AIR_TIME = 0.9;
+export const BOSS_HOP_PEAK = 4; // tiles
+export const BOSS_DAZED = [2.0, 1.6, 1.4]; // per phase
+export const BOSS_HIT_BOUNCE = 360;
+export const BOSS_HIT_INVULN = 1.0;
+export const BOSS_ARENA_SILENCE = 1.5;
+export const SHOCKWAVE_SPEED = 120;
 
 // Scoring (§4.4)
 export const SCORE_COIN = 10;
@@ -59,10 +76,18 @@ export const CAMERA_LOOK_LERP = 0.05;
 // Juice (§7)
 export const SHAKE_STOMP = 2;
 export const SHAKE_HURT = 3;
+export const SHAKE_BOSS_SLAM = 4;
+export const SHAKE_SCALE = { on: 1, reduced: 0.5, off: 0 }; // options (§9.5)
 
-// Levels available in this build, in play order. `sandbox` is a test level reached with ?level=sandbox.
-export const LEVELS = ['1'];
+// All levels in play order (§5.3). `sandbox` is a test level reached with ?level=sandbox.
+export const LEVELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+// Levels whose files exist in this build; the rest show as "coming soon" on the map.
+export const BUILT_LEVELS = ['1', '2', '10'];
 export const EXTRA_LEVELS = ['sandbox'];
+export const LEVEL_NAMES = [
+  'Green Hills', 'Spike Valley', 'Bramble Woods', 'Sunken Ruins', 'Crystal Caves',
+  'Echo Mines', 'Cloud Ruins', 'Sky Bridge', 'Storm Keep', 'Throne of Gloop',
+];
 
 // World palettes (§5.2): sky, ground, grass, accent.
 export const WORLDS = {

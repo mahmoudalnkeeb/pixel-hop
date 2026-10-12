@@ -17,10 +17,10 @@ export class Menu {
     const move = (input.justPressed(MENU_DOWN) ? 1 : 0) - (input.justPressed(MENU_UP) ? 1 : 0);
     if (move !== 0) {
       this.index = (this.index + move + this.items.length) % this.items.length;
-      sfx(audio, 'ui_move');
+      sfx('ui_move');
     }
     if (input.justPressed(CONFIRM)) {
-      sfx(audio, 'ui_confirm');
+      sfx('ui_confirm');
       return this.items[this.index].value;
     }
     return null;

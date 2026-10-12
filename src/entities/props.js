@@ -90,3 +90,31 @@ export class Sign extends Entity {
     }
   }
 }
+
+/** Royal banner hanging from the ceiling (decoration, level 10). */
+export class Banner extends Entity {
+  constructor(x, y) {
+    super({ x: x + 2, y, w: 12, h: 2 * T, z: -1, tags: ['decor'] });
+    this.debug = false;
+    this.t = Math.random() * 10;
+  }
+
+  update(dt) {
+    this.t += dt;
+  }
+
+  render(r) {
+    const x = Math.round(this.pos.x);
+    const y = Math.round(this.pos.y);
+    const sway = Math.round(Math.sin(this.t * 1.5));
+    r.rect(x - 1, y, 14, 2, '#c99a12');
+    r.rect(x, y + 2, 12, 24, '#a3243a');
+    r.rect(x + 1, y + 2, 1, 24, '#c8384f');
+    r.poly([x, y + 26, x + 12, y + 26, x + 6 + sway, y + 31], '#a3243a');
+    // Gold crown emblem.
+    r.rect(x + 3, y + 10, 6, 3, '#ffd23f');
+    r.rect(x + 3, y + 8, 1, 2, '#ffd23f');
+    r.rect(x + 5, y + 7, 2, 3, '#ffd23f');
+    r.rect(x + 8, y + 8, 1, 2, '#ffd23f');
+  }
+}

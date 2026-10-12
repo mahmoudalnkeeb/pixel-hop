@@ -1,8 +1,10 @@
 import { Collision, Entity, Rect } from '../../vendor/h3-engine.min.js';
+import { tiles, TILE } from '../art/tiles.js';
+import { hash2 } from '../art/paint.js';
 import { T, WORLDS } from '../config.js';
 
 // Characters that become entities; their tile is left empty (§4.1).
-const SPAWN_CHARS = 'PFCoGHSe';
+const SPAWN_CHARS = 'PFCoGHSehk';
 // Tile characters the level draws and collides with itself.
 const TILE_CHARS = '.#B-^%';
 
@@ -16,7 +18,8 @@ export class Level extends Entity {
     this.debug = false;
     this.cols = cols;
     this.rows = map.length;
-    this.palette = WORLDS[def.world ?? 1];
+    this.world = def.world ?? 1;
+    this.palette = WORLDS[this.world];
     this.spawns = []; // { ch, x, y } in pixels
     this.unknown = new Set();
     this.platforms = []; // moving platforms Hop can land on
@@ -31,6 +34,7 @@ export class Level extends Entity {
       }),
     );
     this.fakeRegions = this._labelFakeRegions();
+    this.frames = this._tileFrames();
     this._tile = new Rect();
     this._hit = { wall: '', ground: false, ceiling: false, platform: null };
   }
@@ -40,6 +44,12 @@ export class Level extends Entity {
     if (c < 0 || c >= this.cols) return '#';
     if (r < 0 || r >= this.rows) return '.';
     return this.grid[r][c];
+  }
+
+  /** Change a tile at runtime (boss doors) and refresh the sprite frames around it. */
+  setTile(c, r, ch) {
+    this.grid[r][c] = ch;
+    this.frames = this._tileFrames();
   }
 
   isSolid(c, r) {
@@ -202,44 +212,28 @@ export class Level extends Entity {
     }
   }
 
+  /** Sprite frame for each tile, chosen once at load (grass on exposed tops, variants by position). */
+  _tileFrames() {
+    const covered = (c, r) => {
+      const t = this.at(c, r);
+      return t === '#' || t === 'B' || t === '%';
+    };
+    return this.grid.map((line, r) =>
+      line.map((t, c) => {
+        const alt = hash2(c, r) > 0.7;
+        if (t === '#') return covered(c, r - 1) ? (alt ? TILE.innerAlt : TILE.inner) : alt ? TILE.topAlt : TILE.top;
+        if (t === '%') return covered(c, r - 1) ? TILE.fakeInner : TILE.fakeTop;
+        if (t === 'B') return TILE.brick;
+        if (t === '-') return TILE.oneWay;
+        if (t === '^') return TILE.spikes;
+        return -1;
+      }),
+    );
+  }
+
   drawTile(r, t, col, row) {
-    // Placeholder art; replace with sprite-sheet frames per world.
-    const x = col * T;
-    const y = row * T;
-    const pal = this.palette;
-    if (t === '#') drawGround(r, x, y, pal, !this.isSolid(col, row - 1) && this.at(col, row - 1) !== '%');
-    else if (t === 'B') drawBrick(r, x, y);
-    else if (t === '-') {
-      r.rect(x, y, T, 4, '#c08a4b');
-      r.rect(x, y + 4, T, 1, '#7a5530');
-    } else if (t === '^') drawSpikes(r, x, y);
-    else r.rect(x, y, T, T, '#ff00ff'); // not implemented yet
+    const frame = this.frames[row][col];
+    if (frame >= 0) r.sprite(tiles(this.world).frame(frame), col * T, row * T);
+    else r.rect(col * T, row * T, T, T, '#ff00ff'); // tile not implemented yet
   }
 }
-
-export const drawGround = (r, x, y, pal, grassy) => {
-  r.rect(x, y, T, T, pal.ground);
-  r.rect(x + 3, y + 9, 2, 2, 'rgba(0,0,0,0.15)');
-  r.rect(x + 11, y + 4, 2, 2, 'rgba(0,0,0,0.15)');
-  if (grassy) {
-    r.rect(x, y, T, 4, pal.top);
-    r.rect(x, y + 4, T, 1, 'rgba(0,0,0,0.2)');
-  }
-};
-
-const drawBrick = (r, x, y) => {
-  r.rect(x, y, T, T, '#d9822b');
-  r.rect(x, y + 7, T, 1, '#8c4f17');
-  r.rect(x, y + 15, T, 1, '#8c4f17');
-  r.rect(x + 7, y, 1, 7, '#8c4f17');
-  r.rect(x + 3, y + 8, 1, 7, '#8c4f17');
-  r.rect(x + 11, y + 8, 1, 7, '#8c4f17');
-};
-
-// Hazards: light-grey base with red tips (§7).
-const drawSpikes = (r, x, y) => {
-  r.poly([x, y + T, x + 4, y + 7, x + 8, y + T], '#dcdce6');
-  r.poly([x + 8, y + T, x + 12, y + 7, x + 16, y + T], '#dcdce6');
-  r.rect(x + 3, y + 7, 2, 3, '#ff3b3b');
-  r.rect(x + 11, y + 7, 2, 3, '#ff3b3b');
-};

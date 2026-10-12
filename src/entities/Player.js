@@ -5,6 +5,7 @@ import {
   MAX_FALL, MAX_HEARTS, PLAYER_H, PLAYER_W, RIGHT, RUN_SPEED, SHAKE_HURT, T, WALL_COYOTE, WALL_JUMP_LOCK,
   WALL_JUMP_VX, WALL_JUMP_VY, WALL_SLIDE_MAX,
 } from '../config.js';
+import { characters, FRAMES } from '../art/characters.js';
 import { sfx } from '../sfx.js';
 
 const WALL_SLIDE_SFX_EVERY = 0.12;
@@ -42,10 +43,12 @@ export class Player extends Entity {
     this.sx = 1; // squash and stretch, eased back to 1
     this.sy = 1;
     this.safe = { x: this.pos.x, y: this.pos.y }; // last solid ground, for pits
+    this.anim = 0;
   }
 
   update(dt, { input, audio }) {
     const level = this.scene.level;
+    this.anim += dt;
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.invuln > 0) this.invuln -= dt;
     if (this.dropTimer > 0) this.dropTimer -= dt;
@@ -85,10 +88,10 @@ export class Player extends Entity {
         this._dropThrough();
       } else if (this.coyote > 0) {
         this.jump(JUMP_SPEED);
-        sfx(audio, 'jump');
+        sfx('jump');
       } else if (this.wallCoyote > 0) {
         this._wallJump();
-        sfx(audio, 'wall_jump');
+        sfx('wall_jump');
       }
     }
 
@@ -101,7 +104,7 @@ export class Player extends Entity {
       this.vel.y = Math.min(this.vel.y, WALL_SLIDE_MAX);
       this.slideSfx -= dt;
       if (this.slideSfx <= 0) {
-        sfx(audio, 'wall_slide');
+        sfx('wall_slide');
         this.slideSfx = WALL_SLIDE_SFX_EVERY;
       }
     } else {
@@ -122,7 +125,7 @@ export class Player extends Entity {
       if (!wasOnGround && landingSpeed > LAND_SQUASH_SPEED) {
         this.sx = 1.3;
         this.sy = 0.7;
-        sfx(audio, 'land', { volume: Math.min(1, landingSpeed / MAX_FALL) });
+        sfx('land', { volume: Math.min(1, landingSpeed / MAX_FALL) });
         this.scene.dust?.(this.cx, this.pos.y + this.h, 4);
       }
     }
@@ -182,7 +185,7 @@ export class Player extends Entity {
       this._die();
       return true;
     }
-    sfx(audio, 'hurt');
+    sfx('hurt');
     this.vel.x = (this.cx >= fromX ? 1 : -1) * KNOCKBACK_VX;
     this.bounce(KNOCKBACK_VY);
     this.invuln = INVULN_TIME;
@@ -196,7 +199,7 @@ export class Player extends Entity {
       this._die();
       return;
     }
-    sfx(audio, 'pit');
+    sfx('pit');
     this.pos.set(this.safe.x, this.safe.y);
     this.vel.set(0, 0);
     this.invuln = INVULN_TIME;
@@ -204,7 +207,7 @@ export class Player extends Entity {
   }
 
   _die() {
-    sfx(this.scene.ctx.audio, 'die');
+    sfx('die');
     this.state = 'dying';
     this.stateTime = DEATH_TIME;
     this.vel.set(0, 0);
@@ -231,31 +234,34 @@ export class Player extends Entity {
     this.safe.y = y;
   }
 
+  /** Which expression to show this frame. */
+  _frame() {
+    if (this.state === 'dying' || this.invuln > INVULN_TIME - 0.3) return FRAMES.hop_hurt;
+    if (this.sliding) return FRAMES.hop_slide;
+    if (!this.onGround) return this.vel.y < 0 ? FRAMES.hop_up : FRAMES.hop_down;
+    return this.anim % 3.2 > 3.05 ? FRAMES.hop_blink : FRAMES.hop_idle;
+  }
+
   render(r) {
-    if (this.invuln > 0 && Math.floor(this.invuln * FLICKER_HZ * 2) % 2 === 1) return;
+    if (this.invuln > 0 && this.state === 'play' && Math.floor(this.invuln * FLICKER_HZ * 2) % 2 === 1) return;
     let sx = this.sx;
     let sy = this.sy;
     if (this.state === 'dying') {
       const t = Math.max(0, this.stateTime / DEATH_TIME);
       sx = 1 + (1 - t) * 0.6;
       sy = t;
+    } else if (this.onGround && Math.abs(this.vel.x) > 20) {
+      // Run cycle: a squashy bounce instead of legs.
+      const bob = Math.sin(this.anim * 22);
+      sy += bob * 0.08;
+      sx -= bob * 0.05;
     }
-    // Squash and stretch around the feet. Replace with animation frames (§7).
-    const w = Math.max(1, Math.round(this.w * sx));
-    const h = Math.max(1, Math.round(this.h * sy));
-    const x = Math.round(this.cx - w / 2);
-    const y = Math.round(this.pos.y + this.h - h);
-    r.rect(x + 1, y, w - 2, h, '#ff5e5b');
-    r.rect(x, y + 2, w, h - 3, '#ff5e5b');
-    r.rect(x + 1, y + h - 2, w - 2, 2, '#d8423f');
-    if (h < 6) return;
-    // Big eyes looking where Hop faces.
-    const ex = Math.round(this.cx + this.facing * 2);
-    const ey = y + 3;
-    r.rect(ex - 4, ey, 3, 4, '#fff');
-    r.rect(ex + 1, ey, 3, 4, '#fff');
-    const px = this.facing > 0 ? 1 : 0;
-    r.rect(ex - 4 + px + 1, ey + 1, 1, 2, '#222');
-    r.rect(ex + 1 + px + 1, ey + 1, 1, 2, '#222');
+    if (sy <= 0) return;
+    const frame = characters().frame(this._frame());
+    r.sprite(frame, Math.round(this.cx), Math.round(this.pos.y + this.h), {
+      w: Math.round(16 * sx),
+      h: Math.round(16 * sy),
+      flipX: this.facing < 0,
+    });
   }
 }

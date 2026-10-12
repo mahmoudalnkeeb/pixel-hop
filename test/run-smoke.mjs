@@ -1,9 +1,10 @@
 // Drives test/smoke.html in headless Chrome over the DevTools protocol.
-// Usage: serve the repo on :8765, then `node test/run-smoke.mjs <level> [seconds] [screenshot.png]`
+// Usage: serve the repo on :8765, then `node test/run-smoke.mjs <level> [seconds] [screenshot.png] [extra query]`
+// e.g. `node test/run-smoke.mjs 10 60 '' boss` runs the scripted boss fight.
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
-const [level = '1', seconds = '40', shot] = process.argv.slice(2);
+const [level = '1', seconds = '40', shot, extra = ''] = process.argv.slice(2);
 const chrome = spawn('google-chrome', ['--headless=new', '--disable-gpu', '--no-sandbox', '--remote-debugging-port=9333', '--window-size=960,540', 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 try {
@@ -22,7 +23,7 @@ try {
   });
   const send = (method, params = {}) => new Promise((r) => { pending.set(++id, r); ws.send(JSON.stringify({ id, method, params })); });
   await send('Page.enable');
-  await send('Page.navigate', { url: `http://localhost:8765/test/smoke.html?level=${level}&debug` });
+  await send('Page.navigate', { url: `http://localhost:8765/test/smoke.html?level=${level}&debug${extra ? `&${extra}` : ''}` });
   const deadline = Date.now() + Number(seconds) * 1000;
   let state = '';
   while (Date.now() < deadline) {

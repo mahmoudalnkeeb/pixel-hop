@@ -41,7 +41,7 @@ export class MovingPlatform extends Entity {
         this.pos.set(tx, ty);
         this.toB = !this.toB;
         this.wait = this.waitTime;
-        if (this.onCamera()) sfx(audio, 'platform');
+        if (this.onCamera()) sfx('platform');
       } else {
         this.pos.x += (ddx / d) * step;
         this.pos.y += (ddy / d) * step;

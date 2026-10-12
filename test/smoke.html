@@ -1,7 +1,9 @@
 <!doctype html>
 <!-- Browser smoke test: open /test/smoke.html?level=1&debug. Holds Right and hops; reports state in document.title. -->
 <html>
-  <head><base href="/" /></head>
+  <head>
+    <base href="/" />
+  </head>
   <body style="margin: 0; background: #000">
     <canvas id="game"></canvas>
     <script>
@@ -19,35 +21,80 @@
         const p = s.player;
         seen.add(s.key);
         document.title = JSON.stringify({
-          scene: s.key, scenes: [...seen], errors, x: p && Math.round(p.pos.x), hearts: p?.hearts,
-          deaths: s.deaths, coins: s.coins, score: s.score, enemies: s.count?.('enemy'), state: s.state,
+          scene: s.key,
+          scenes: [...seen],
+          errors,
+          x: p && Math.round(p.pos.x),
+          hearts: p?.hearts,
+          deaths: s.deaths,
+          coins: s.coins,
+          score: s.score,
+          enemies: s.count?.('enemy'),
+          state: s.state,
         });
       };
       await wait(300);
-      key('keydown', 'ArrowRight');
-      for (let i = 0; i < 120; i++) {
-        key('keydown', 'Space');
-        await wait(i % 3 === 0 ? 380 : 150);
-        key('keyup', 'Space');
-        await wait(90);
-        report();
-        if (game.scenes.current.key === 'clear') break;
-      }
-      key('keyup', 'ArrowRight');
-      // Pause and unpause.
-      key('keydown', 'Escape'); await wait(100); key('keyup', 'Escape'); await wait(100); report();
-      key('keydown', 'Escape'); await wait(100); key('keyup', 'Escape'); await wait(100); report();
-      // Teleport next to the flag and walk into it to exercise the clear flow.
-      if (game.scenes.current.key === 'play') {
+      if (new URLSearchParams(location.search).has('boss')) {
+        // Boss phase 1: walk into the arena, then stomp King Gloop each time he's Dazed.
         const s = game.scenes.current;
-        const flag = s.first('flag');
-        s.player.pos.set(flag.pos.x - 40, flag.pos.y + flag.h - s.player.h - 2);
-        s.player.vel.set(0, 0);
-        key('keydown', 'ArrowRight'); await wait(1000); key('keyup', 'ArrowRight');
-        await wait(3500); report();
-        key('keydown', 'Enter'); await wait(100); key('keyup', 'Enter'); await wait(500);
+        s.player.pos.set(s.arena.x + 3 * 16, s.arena.y + 9 * 16);
+        const states = new Set();
+        for (let hit = 0; hit < 2; hit++) {
+          for (let i = 0; i < 300 && s.boss.state !== 'dazed'; i++) {
+            s.player.invuln = 5; // keep the test player alive while we wait
+            states.add(s.boss.state);
+            await wait(50);
+          }
+          s.player.invuln = 0;
+          s.player.pos.set(s.boss.cx - 6, s.boss.pos.y - 30);
+          s.player.vel.set(0, 100);
+          await wait(400);
+        }
+        await wait(4000);
+        seen.add([...states].join('>'));
+        report();
+      } else {
+        key('keydown', 'ArrowRight');
+        for (let i = 0; i < 120; i++) {
+          key('keydown', 'Space');
+          await wait(i % 3 === 0 ? 380 : 150);
+          key('keyup', 'Space');
+          await wait(90);
+          report();
+          if (game.scenes.current.key === 'clear') break;
+        }
+        const boss = game.scenes.current.boss;
+        if (boss) document.title += ` boss=${boss.state}/${boss.hp}`;
+        key('keyup', 'ArrowRight');
+        // Pause and unpause.
+        key('keydown', 'Escape');
+        await wait(100);
+        key('keyup', 'Escape');
+        await wait(100);
+        report();
+        key('keydown', 'Escape');
+        await wait(100);
+        key('keyup', 'Escape');
+        await wait(100);
+        report();
+        // Teleport next to the flag and walk into it to exercise the clear flow.
+        if (game.scenes.current.key === 'play') {
+          const s = game.scenes.current;
+          const flag = s.first('flag');
+          s.player.pos.set(flag.pos.x - 40, flag.pos.y + flag.h - s.player.h - 2);
+          s.player.vel.set(0, 0);
+          key('keydown', 'ArrowRight');
+          await wait(1000);
+          key('keyup', 'ArrowRight');
+          await wait(3500);
+          report();
+          key('keydown', 'Enter');
+          await wait(100);
+          key('keyup', 'Enter');
+          await wait(500);
+        }
+        report();
       }
-      report();
       document.body.dataset.done = '1';
     </script>
   </body>

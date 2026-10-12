@@ -1,6 +1,6 @@
 import { Entity } from '../../vendor/h3-engine.min.js';
 import { T } from '../config.js';
-import { drawGround } from './Level.js';
+import { tiles } from '../art/tiles.js';
 
 const INSIDE_ALPHA = 0.4;
 
@@ -38,18 +38,13 @@ export class FakeWalls extends Entity {
     const c1 = Math.min(level.cols - 1, Math.floor((view.x + view.w) / T));
     const r0 = Math.max(0, Math.floor(view.y / T));
     const r1 = Math.min(level.rows - 1, Math.floor((view.y + view.h) / T));
+    const sheet = tiles(level.world);
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
         const id = level.fakeRegions[row][col];
         if (id < 0) continue;
         r.alpha = this.inside[id] ? INSIDE_ALPHA : 1;
-        const x = col * T;
-        const y = row * T;
-        const above = level.at(col, row - 1);
-        drawGround(r, x, y, level.palette, above !== '#' && above !== 'B' && above !== '%');
-        // A hairline crack: the visible hint that this wall hides something (§5.1).
-        r.rect(x + 6, y + 7, 1, 3, 'rgba(0,0,0,0.25)');
-        r.rect(x + 7, y + 10, 1, 2, 'rgba(0,0,0,0.25)');
+        r.sprite(sheet.frame(level.frames[row][col]), col * T, row * T);
       }
     }
     r.alpha = 1;
