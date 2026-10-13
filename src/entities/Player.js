@@ -93,7 +93,8 @@ export class Player extends Entity {
     this.coyote = this.onGround ? COYOTE_TIME : this.coyote - dt;
     this.buffer = jumpPressed ? JUMP_BUFFER : this.buffer - dt;
     if (this.buffer > 0) {
-      if (this.onGround && input.isDown(DOWN) && (this.platform || level.onOneWayOnly(this))) {
+      // Only one-way tiles can be dropped through (§3.1); on a moving platform ↓ + Jump is just a jump.
+      if (this.onGround && input.isDown(DOWN) && !this.platform && level.onOneWayOnly(this)) {
         this._dropThrough();
       } else if (this.coyote > 0) {
         if (this.onGround) this.scene.dust?.(this.cx, this.pos.y + this.h, 3);

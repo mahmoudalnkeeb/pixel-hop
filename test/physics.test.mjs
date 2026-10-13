@@ -150,6 +150,11 @@ const flat = ['..........', '..........', '..........', '..........', '.........
   for (let i = 0; i < 60; i++) step(s);
   assert.ok(Math.abs(s.player.pos.x - plat.pos.x - offset) < 0.01, 'carried with the platform');
   console.log(`platform carry: moved ${(plat.pos.x - T).toFixed(1)} px with it`);
+
+  // Down + Jump on a moving platform jumps instead of dropping through it.
+  step(s, { down: [DOWN[0], JUMP[0]], pressed: [JUMP[0]] });
+  assert.ok(s.player.vel.y < -200 && s.player.dropTimer <= 0, 'down + jump on a moving platform is a jump');
+  console.log('moving platform: down + jump jumps');
 }
 
 // Riding vertical platforms both ways: Hop stays on (descending ones used to drop him through).
