@@ -2,7 +2,7 @@ import { Collision, lerp, Pool, Rect, Scene } from '../../vendor/h3-engine.min.j
 import { SONGS } from '../audio/songs.js';
 import {
   BOSS_ARENA_SILENCE, BOSS_ASSIST_OFFER_DEATHS, BOSS_HP, BOSS_SLOWMO, BUILT_LEVELS, CAMERA_LERP, CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP, CAMERA_OFFSET_Y,
-  CHAIN_SCORES, EXTRA_LEVELS, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
+  CHAIN_SCORES, CULL_MARGIN, HURT_INSET, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
   SCORE_TIME_BONUS, SHAKE_SCALE, SHAKE_STOMP, SPRING_SPEED, STOMP_BOUNCE, STOMP_BOUNCE_HELD, STOMP_REACH, T,
   THORNWATER_CAMERA_BIAS, VIEW_H, VIEW_W,
   WALL_JUMP_FROM_LEVEL, WORLDS,
@@ -19,7 +19,9 @@ import { Banner, Checkpoint, Flag, Sign, Spring } from '../entities/props.js';
 import { levelRecord, loadSave, writeSave } from '../save.js';
 import { sfx } from '../sfx.js';
 import { Run } from '../telemetry.js';
+import { textWidth } from '../ui/font.js';
 import { drawHud } from '../ui/hud.js';
+import { panel } from '../ui/panel.js';
 import { label } from '../ui/label.js';
 import { Backdrop } from '../world/Backdrop.js';
 import { FakeWalls } from '../world/FakeWalls.js';
@@ -28,6 +30,7 @@ import { Level } from '../world/Level.js';
 const COIN_CHAIN_WINDOW = 0.4;
 const CLEAR_DELAY = 1.2;
 const PAUSE_DUCK = 0.7;
+const HINT_FADE = 6; // 1/s: sign hints fade in or out in about 0.17 s
 const WATCHES = ['vel', 'state', 'ground', 'wall', 'hearts', 'boss'];
 const ENEMIES = { e: Slime, h: Hopper, k: GloopKnight, t: Thornback, b: Bat, d: Dropper, p: Puffer };
 
@@ -40,10 +43,8 @@ const nextBuilt = (id) => {
 
 /** Takes `{ level }`: a level id from BUILT_LEVELS or EXTRA_LEVELS. */
 export class PlayScene extends Scene {
-  preload(assets) {
-    const json = {};
-    for (const id of [...BUILT_LEVELS, ...EXTRA_LEVELS]) json[`level-${id}`] = `levels/${id}.json`;
-    return assets.load({ json }); // keys already loaded are skipped
+  preload(assets, { level = LEVELS[0] } = {}) {
+    return assets.load({ json: { [`level-${level}`]: `levels/${level}.json` } }); // keys already loaded are skipped
   }
 
   enter({ level = LEVELS[0] } = {}) {
@@ -55,17 +56,12 @@ export class PlayScene extends Scene {
     const palette = WORLDS[this.def.world ?? 1];
     renderer.background = palette.sky;
 
-    // Screen shake follows the accessibility option (§9.5).
-    const shake = this.camera.shake.bind(this.camera);
-    this.camera.shake = (intensity, duration) => {
-      const scale = SHAKE_SCALE[this.save.options.shake] ?? 1;
-      if (scale > 0) shake(intensity * scale, duration);
-    };
-
-    this.add(new Backdrop(palette));
+    this.add(new Backdrop(this.def.backdrop ?? this.def.world ?? 1));
     this.level = this.add(new Level(this.def));
     if (this.level.unknown.size > 0) console.warn(`Level ${this.levelId}: tiles not implemented yet: ${[...this.level.unknown].join(' ')}`);
 
+    this.signs = [];
+    this.hint = { text: '', alpha: 0 }; // sign text shown at the top of the screen
     // Platforms first: they must move before anything that rides them.
     this.arena = null;
     this.boss = null;
@@ -75,7 +71,7 @@ export class PlayScene extends Scene {
       if (obj.type === 'wind') this.winds.push(this.add(new WindZone(obj)));
       else if (obj.type === 'thornwater') this.thornwaters.push(this.add(new Thornwater(obj, this.level.h)));
       else if (obj.type === 'platform') this.level.platforms.push(this.add(new MovingPlatform(obj)));
-      else if (obj.type === 'sign') this.add(new Sign(obj.x * T, obj.y * T, obj.text));
+      else if (obj.type === 'sign') this.signs.push(this.add(new Sign(obj.x * T, obj.y * T, obj.text)));
       else if (obj.type === 'banner') this.add(new Banner(obj.x * T, obj.y * T));
       else if (obj.type === 'arena') {
         this.arena = new Rect(obj.x * T, obj.y * T, obj.w * T, obj.h * T);
@@ -125,10 +121,11 @@ export class PlayScene extends Scene {
     );
     this.add(new FakeWalls(this.level));
     if (this.def.darkness) this.darkness = new Darkness(this.def.darkness);
-    this.timeScale = assist.speed;
+    this.assistSpeed = assist.speed;
     this.reduceFlashing = this.save.options.flashing === 'reduced';
     this.player.reduceFlashing = this.reduceFlashing;
     this.slowMo = 0; // seconds of boss slow motion left
+    this.applySpeed(0);
     this.respawnPoint = { x: this.player.pos.x, y: this.player.pos.y };
     this.checkpointIndex = -1;
 
@@ -169,10 +166,7 @@ export class PlayScene extends Scene {
     game.jukebox.play(music, { fadeIn: 0.5 });
 
     // The engine pauses while the tab is hidden; open the pause menu when it comes back (§9.4).
-    this._onVisibility = () => {
-      if (document.hidden) this.pauseOnReturn = true;
-    };
-    document.addEventListener('visibilitychange', this._onVisibility);
+    this._offHidden = game.events.on('hidden', () => (this.pauseOnReturn = true));
 
     const p = this.player;
     game.debug.watch('vel', () => `${p.vel.x.toFixed(0)},${p.vel.y.toFixed(0)}`);
@@ -186,16 +180,23 @@ export class PlayScene extends Scene {
   exit() {
     // Leaving mid-level (restart, quit) still counts as a run for the playtest data.
     if (this.state === 'play') this.run.finish(false, this.assisted);
-    document.removeEventListener('visibilitychange', this._onVisibility);
+    this._offHidden();
     for (const w of WATCHES) this.ctx.game.debug.unwatch(w);
   }
 
   update(dt, { input }) {
+    this.applySpeed(dt);
+    // Options can change mid-level from the pause menu, so this is read every step (§9.5).
+    this.camera.shakeScale = SHAKE_SCALE[this.save.options.shake] ?? 1;
     if (this.state === 'play') {
       this.time += dt;
       this.run.tick(dt);
     }
     if (this.captionTime > 0) this.captionTime -= dt;
+    // Sign hints fade in while Hop stands by a sign and fade out after he leaves.
+    const sign = this.signs.find((s) => s.near());
+    if (sign) this.hint.text = sign.text;
+    this.hint.alpha = Math.max(0, Math.min(1, this.hint.alpha + (sign ? dt : -dt) * HINT_FADE));
     if (this.state === 'play' && (input.justPressed(PAUSE) || this.pauseOnReturn)) {
       this.pauseOnReturn = false;
       sfx('pause');
@@ -213,6 +214,8 @@ export class PlayScene extends Scene {
 
     if (this.arena && this.fight === 'none' && this.player.pos.x > this.arena.x + 2 * T) this.enterArena();
 
+    this.cullOffscreen();
+
     if (this.player.state !== 'play') return;
     Collision.check(this, 'player', 'enemy', this._onEnemy);
     Collision.check(this, 'player', 'pickup', this._onPickup);
@@ -222,16 +225,22 @@ export class PlayScene extends Scene {
     Collision.check(this, 'player', 'seed', this._onSeed);
   }
 
-  /** Stomp when falling onto the enemy's top; any other contact hurts (§4.3). */
+  /** Stomp when falling onto the enemy's top; other contact with Hop's (slightly smaller) hurtbox hurts (§4.3). */
   touchEnemy(p, enemy) {
     if (enemy.dead || p.state !== 'play') return;
     if (enemy.has('boss')) {
       enemy.touch(p);
       return;
     }
-    const stomp = enemy.has('stompable') && p.vel.y > 0 && p.pos.y + p.h - enemy.pos.y < STOMP_REACH;
-    if (!stomp) {
-      if (p.hurt(enemy.cx)) enemy.hitPlayer = true;
+    const onTop = enemy.has('stompable') && p.pos.y + p.h - enemy.pos.y < STOMP_REACH;
+    // Feet grazing the top on the way up (jumping over it, or a second enemy right after a stomp) is harmless.
+    if (onTop && p.vel.y <= 0) return;
+    if (!onTop) {
+      const hurtbox =
+        p.pos.x + HURT_INSET < enemy.pos.x + enemy.w &&
+        p.pos.x + p.w - HURT_INSET > enemy.pos.x &&
+        p.pos.y + HURT_INSET < enemy.pos.y + enemy.h;
+      if (hurtbox && p.hurt(enemy.cx)) enemy.hitPlayer = true;
       return;
     }
     const { input } = this.ctx;
@@ -405,6 +414,7 @@ export class PlayScene extends Scene {
     this.fight = 'won';
     this.clearBossFx();
     this.slowMo = BOSS_SLOWMO;
+    this.applySpeed(0);
     this.game.jukebox.stop(0.5);
   }
 
@@ -510,6 +520,7 @@ export class PlayScene extends Scene {
     // Options may have changed while paused; nothing in the save is pending, so reload it.
     this.save = loadSave();
     this.record = levelRecord(this.save, this.levelId);
+    this.syncAssist();
     if (action === 'boss_intro') this.startFight();
     else if (action === 'assist') this.applyAssist();
     else if (action === 'checkpoint') this.respawn();
@@ -533,11 +544,40 @@ export class PlayScene extends Scene {
   /** Assist Mode turned on mid-level (from the offer after repeated boss deaths). */
   applyAssist() {
     const assist = this.save.options.assist;
-    this.timeScale = assist.speed;
+    this.assistSpeed = assist.speed;
+    this.applySpeed(0);
     this.player.maxHearts = assist.hearts;
     this.player.hearts = assist.hearts;
     this.player.invincible = assist.invincible;
     this.assisted = assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
+  }
+
+  /** Apply Assist options changed from the pause menu, without refilling hearts (that would be a free heal). */
+  syncAssist() {
+    const assist = this.save.options.assist;
+    this.assistSpeed = assist.speed;
+    this.applySpeed(0);
+    this.player.maxHearts = assist.hearts;
+    this.player.hearts = Math.min(this.player.hearts, assist.hearts);
+    this.player.invincible = assist.invincible;
+    this.assisted ||= assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
+  }
+
+  /**
+   * Skip drawing entities outside the view plus CULL_MARGIN (sprites overhang their hitboxes).
+   * Zero-size entities (backdrop, fake walls) and `noCull` ones draw where they like, so they always draw.
+   * Enemies also skip their updates off screen (Enemy#onCamera).
+   */
+  cullOffscreen() {
+    const v = this.camera.view;
+    const x0 = v.x - CULL_MARGIN;
+    const x1 = v.x + v.w + CULL_MARGIN;
+    const y0 = v.y - CULL_MARGIN;
+    const y1 = v.y + v.h + CULL_MARGIN;
+    for (const e of this.entities) {
+      if ((e.w === 0 && e.h === 0) || e.noCull) continue;
+      e.visible = e.pos.x + e.w > x0 && e.pos.x < x1 && e.pos.y + e.h > y0 && e.pos.y < y1;
+    }
   }
 
   dust(x, y, n) {
@@ -548,14 +588,10 @@ export class PlayScene extends Scene {
     for (let i = 0; i < n; i++) this.add(this.particles.get().spawn(x, y, color, this.particles, opts));
   }
 
-  /** Game speed: Assist Mode (§9.5) and boss slow motion (§6.3). Overrides the engine's private step; see docs. */
-  _step(dt) {
-    let scale = this.timeScale;
-    if (this.slowMo > 0) {
-      this.slowMo -= dt;
-      scale *= 0.3;
-    }
-    super._step(dt * scale);
+  /** Game speed: Assist Mode (§9.5) times boss slow motion (§6.3). `dt` is already scaled, so slow motion counts down in real time. */
+  applySpeed(dt) {
+    if (this.slowMo > 0) this.slowMo -= dt / this.timeScale;
+    this.timeScale = this.assistSpeed * (this.slowMo > 0 ? 0.3 : 1);
   }
 
   render(r) {
@@ -581,6 +617,17 @@ export class PlayScene extends Scene {
     for (let i = 0; i < 3; i++) hud.gems[i] = this.gems[i] || this.record.gems[i];
     drawHud(r, hud);
     if (this.fight === 'on' || this.fight === 'won') this.drawBossBar(r);
+    else if (this.hint.alpha > 0) this.drawHint(r);
+  }
+
+  /** The nearby sign's text, in a panel at the top centre, clear of the action (§9.2). */
+  drawHint(r) {
+    const w = textWidth(this.hint.text) + 16;
+    const y = 24 - Math.round((1 - this.hint.alpha) * 6);
+    r.alpha = this.hint.alpha;
+    panel(r, Math.floor(VIEW_W / 2 - w / 2), y, w, 15, { edge: '#ffd23f' });
+    label(r, this.hint.text, VIEW_W / 2, y + 4);
+    r.alpha = 1;
   }
 
   /** Six segments, top centre (§9.2). */

@@ -1,18 +1,33 @@
 // Every tunable number lives here (GDD §3.2). Tune the game only through this file.
 
 export const T = 16; // tile size, px
-export const VIEW_W = 320;
-export const VIEW_H = 180;
+// The view is at least 320×180 and grows to match the screen's shape, so there are no black bars
+// (src/view.js). VIEW_W/VIEW_H are live bindings: read them when drawing, not at module load.
+export const MIN_VIEW_W = 320;
+export const MIN_VIEW_H = 180;
+export const MAX_VIEW_W = 480; // about 21:9
+export const MAX_VIEW_H = 192; // the shortest level (10) is 12 rows
+export let VIEW_W = MIN_VIEW_W;
+export let VIEW_H = MIN_VIEW_H;
+export const setViewSize = (w, h) => {
+  VIEW_W = w;
+  VIEW_H = h;
+};
 
 // Movement (§3.2)
-export const GRAVITY = 900;
+export const GRAVITY = 900; // rising, and for everything that isn't Hop
+export const FALL_GRAVITY = 1250; // Hop falls faster than he rises, so jumps feel weighty, not floaty
+export const APEX_SPEED = 40; // px/s; below this vertical speed with jump held...
+export const APEX_GRAVITY = 0.5; // ...gravity is scaled by this: a short hang at the top of the arc
 export const MAX_FALL = 420;
 export const RUN_SPEED = 110;
-export const ACCEL_GROUND = 1000;
-export const ACCEL_AIR = 650;
-export const FRICTION = 1400;
+export const ACCEL_GROUND = 2000; // full speed in about 0.05 s
+export const ACCEL_AIR = 1200;
+export const FRICTION = 2600; // stops in about 0.04 s
 export const JUMP_SPEED = 320;
-export const JUMP_CUT = 2.5; // gravity multiplier while rising with jump released
+export const JUMP_CUT_SPEED = 80; // releasing jump caps upward speed to this (a hard cut)...
+export const JUMP_MIN_TIME = 0.07; // ...but only after rising this long, so a tap is still a short hop
+export const NUDGE = 4; // px; head bumps on a corner slide past it, and feet clipping a ledge pop up onto it
 export const COYOTE_TIME = 0.08;
 export const JUMP_BUFFER = 0.12;
 export const STOMP_BOUNCE = 220;
@@ -21,7 +36,7 @@ export const SPRING_SPEED = 480;
 export const WALL_SLIDE_MAX = 60;
 export const WALL_JUMP_VX = 140;
 export const WALL_JUMP_VY = 300;
-export const WALL_JUMP_LOCK = 0.12; // input toward the wall is ignored this long
+export const WALL_JUMP_LOCK = 0.12; // the kick away from the wall can't be steered this long
 export const WALL_COYOTE = 0.08;
 export const WALL_JUMP_FROM_LEVEL = 5;
 export const DROP_THROUGH_TIME = 0.2; // one-way platforms ignored this long after ↓ + Jump
@@ -39,6 +54,7 @@ export const LAND_SQUASH_SPEED = 150;
 
 // Enemies (§4.3)
 export const STOMP_REACH = 8; // px; feet must be less than this below the enemy's top
+export const HURT_INSET = 2; // px; Hop's hurtbox is this much smaller than his body on the sides and top
 export const SLIME_SPEED = 30;
 export const HOPPER_VX = 60;
 export const HOPPER_VY = 260;
@@ -124,11 +140,11 @@ export const LEVEL_NAMES = [
 
 // World palettes (§5.2): sky, ground, grass, accent.
 export const WORLDS = {
-  1: { sky: '#6ec6ff', ground: '#8a5a2b', top: '#5cc94e', accent: '#ff5e5b', far: '#a9dcf5', near: '#8fd3a8' },
-  2: { sky: '#2e4a3a', ground: '#5b4632', top: '#3f7d3a', accent: '#e0b84a', far: '#3a5a48', near: '#41634d' },
-  3: { sky: '#141625', ground: '#3b3a52', top: '#6a6890', accent: '#6fe3ff', far: '#1c1e32', near: '#25283f' },
-  4: { sky: '#ffd9a8', ground: '#e8e0f0', top: '#b7a6d6', accent: '#ff8fb1', far: '#ffe7c7', near: '#f5d6e6' },
-  5: { sky: '#2a1f3d', ground: '#4b3b5c', top: '#6d5a7e', accent: '#9be36b', far: '#33284a', near: '#3d3155' },
+  1: { sky: '#6ec6ff', ground: '#8a5a2b', top: '#5cc94e', accent: '#ff5e5b' },
+  2: { sky: '#2e4a3a', ground: '#5b4632', top: '#3f7d3a', accent: '#e0b84a' },
+  3: { sky: '#141625', ground: '#3b3a52', top: '#6a6890', accent: '#6fe3ff' },
+  4: { sky: '#ffd9a8', ground: '#e8e0f0', top: '#b7a6d6', accent: '#ff8fb1' },
+  5: { sky: '#2a1f3d', ground: '#4b3b5c', top: '#6d5a7e', accent: '#9be36b' },
 };
 
 // Controls (§3.1). Remapping replaces these arrays.

@@ -3,6 +3,7 @@ import { BACK, CONFIRM, VIEW_H, VIEW_W } from '../config.js';
 import { sfx } from '../sfx.js';
 import { formatTime } from '../ui/hud.js';
 import { label } from '../ui/label.js';
+import { panel } from '../ui/panel.js';
 
 const ROW = 12;
 
@@ -50,20 +51,20 @@ export class ClearScene extends Scene {
   render(r) {
     const s = this.stats;
     const y = Math.round(this.panel.y);
-    const cx = VIEW_W / 2;
+    const cx = Math.floor(VIEW_W / 2); // whole pixel, so panel edges stay sharp on odd view widths
     r.rect(0, 0, VIEW_W, VIEW_H, 'rgba(10,10,30,0.55)');
-    r.rect(60, y + 20, 200, 140, 'rgba(20,20,45,0.92)');
-    r.strokeRect(60.5, y + 20.5, 199, 139, '#ffd23f');
+    panel(r, cx - 100, y + 20, 200, 140, { edge: '#ffd23f' });
     label(r, 'LEVEL CLEAR!', cx, y + 28, { size: 16, color: '#ffd23f' });
     label(r, s.name ?? `Level ${s.levelId}`, cx, y + 46);
     if (s.assisted) {
       // Small assist icon, for transparency only (§9.5).
-      r.rect(236, y + 26, 16, 12, '#3d7be8');
-      label(r, 'A', 244, y + 28);
+      r.rect(cx + 76, y + 26, 16, 12, '#3d7be8');
+      label(r, 'A', cx + 84, y + 28);
     }
     const rows = this.rows;
     const shown = Math.floor(this.panel.shown);
-    for (let i = 0; i < Math.min(shown, rows.length); i++) label(r, rows[i], 80, y + 64 + i * ROW, { align: 'left' });
-    if (this.done) label(r, s.next ? 'Enter: next level   Esc: map' : 'Enter: map', cx, y + 140, { color: '#9be36b' });
+    for (let i = 0; i < Math.min(shown, rows.length); i++) label(r, rows[i], cx - 80, y + 64 + i * ROW, { align: 'left' });
+    const touch = this.game.touch?.visible;
+    if (this.done) label(r, s.next ? (touch ? 'Tap: next level' : 'Enter: next level   Esc: map') : touch ? 'Tap: map' : 'Enter: map', cx, y + 140, { color: '#9be36b' });
   }
 }

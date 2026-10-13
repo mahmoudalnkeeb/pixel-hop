@@ -78,9 +78,9 @@ export class EndingScene extends Scene {
   }
 
   renderStats(r) {
-    const cx = VIEW_W / 2;
+    const cx = Math.floor(VIEW_W / 2); // whole pixel, so panel edges stay sharp on odd view widths
     this.meadow(r, 0.4);
-    r.rect(50, 20, 220, 130, 'rgba(20,20,45,0.85)');
+    r.rect(cx - 110, 20, 220, 130, 'rgba(20,20,45,0.85)');
     label(r, 'THE SUN SEED IS HOME!', cx, 28, { size: 16, color: '#ffd23f' });
     label(r, 'Colour returns to Hopshire.', cx, 50);
     const rows = [
@@ -89,9 +89,9 @@ export class EndingScene extends Scene {
       `Sun Gems      ${this.gems}/${ALL_GEMS}`,
       `Coin medals   ${this.coinMedals}/${LEVELS.length}`,
     ];
-    rows.forEach((row, i) => label(r, row, 80, 72 + i * 13, { align: 'left' }));
+    rows.forEach((row, i) => label(r, row, cx - 80, 72 + i * 13, { align: 'left' }));
     if (this.assisted) label(r, '(assist)', cx, 126, { color: '#aab' });
-    label(r, 'Enter: credits', cx, 136, { color: '#9be36b' });
+    label(r, this.game.touch?.visible ? 'Tap: credits' : 'Enter: credits', cx, 136, { color: '#9be36b' });
   }
 
   renderCredits(r) {
@@ -122,7 +122,7 @@ export class EndingScene extends Scene {
     label(r, 'TRUE ENDING', VIEW_W / 2, 24, { size: 16, color: '#ffd23f' });
     label(r, 'All 27 Sun Gems shine over Hopshire.', VIEW_W / 2, 48);
     label(r, 'Golden Hop unlocked!', VIEW_W / 2, 62, { color: '#ffd23f' });
-    label(r, 'Enter: title', VIEW_W / 2, 84, { color: '#9be36b' });
+    label(r, this.game.touch?.visible ? 'Tap: title' : 'Enter: title', VIEW_W / 2, 84, { color: '#9be36b' });
   }
 
   meadow(r, bloom) {

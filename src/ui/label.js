@@ -1,6 +1,11 @@
-/** Draw text with a 1px drop shadow so it reads over any background (Appendix C.5). Fallback until the bitmap font exists. */
-export const label = (r, str, x, y, { size = 8, color = '#fff', align = 'center' } = {}) => {
-  const font = `bold ${size}px monospace`;
-  r.text(str, x + 1, y + 1, { font, color: 'rgba(0,0,0,0.5)', align });
-  r.text(str, x, y, { font, color, align });
+import { drawText } from './font.js';
+
+/**
+ * Draw outlined pixel-font text so it reads over any background (Appendix C.5).
+ * `size` keeps the old CSS-font sizes: 8 is the base font, 16 and 24 draw it at 2× and 3× with a highlight.
+ * `wave` (seconds) makes the letters bob, for titles.
+ */
+export const label = (r, str, x, y, { size = 8, color = '#fff', align = 'center', wave } = {}) => {
+  const scale = Math.max(1, Math.round(size / 8));
+  drawText(r, String(str), x, y, { color, align, scale, shine: scale > 1, wave });
 };

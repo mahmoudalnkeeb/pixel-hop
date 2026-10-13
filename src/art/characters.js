@@ -1,5 +1,4 @@
-import { SpriteSheet } from '../../vendor/h3-engine.min.js';
-import { canvas, ellipse, grid, px } from './paint.js';
+import { ellipse, grid, paddedSheet, px } from './paint.js';
 
 // One shared 16×16 characters sheet (§7: few shared sheets keep Canvas 2D batching intact).
 // Frames face right; draw with flipX to face left.
@@ -9,17 +8,17 @@ const HOP = [
   '................',
   '.....kkkkkk.....',
   '...kkrrrrrrkk...',
-  '..krrllrrrrrrk..',
-  '..krlrrrrrrrrk..',
+  '..krhhlrrrrrrk..',
+  '..krhllrrrrrrk..',
+  '.krllrrEEEEEErk.',
+  '.krlrrrEEEEEErk.',
   '.krrrrrEEEEEErk.',
-  '.krrrrrEEEEEErk.',
-  '.krrrrrEEEEEErk.',
-  '.krrrrrEEEEEErk.',
-  '.krrrrrrrrrrrrk.',
-  '.krrnrrrrrrnrrk.',
-  '.kdrrrrrrrrrrdk.',
+  '.krrrrrEEEEEEdk.',
+  '.krrrrrrrrrrrdk.',
+  '.krrnnrrrrnnrdk.',
+  '.kdrrrrrrrrrddk.',
   '..kddrrrrrrddk..',
-  '...kkddddddkk...',
+  '...kkDDDDDDkk...',
   '....kkkkkkkk....',
 ];
 // Eye block (cols 7–12, rows 6–9), one per expression.
@@ -31,42 +30,66 @@ const EYES = {
   hurt: ['rrrrrr', 'kkrrkk', 'rkrrrk', 'rrrrrr'],
   slide: ['wwrrww', 'pwrrpw', 'pwrrpw', 'wwrrww'],
 };
-const HOP_PAL = { k: '#3a1020', r: '#ff5e5b', l: '#ffa59a', d: '#c8383d', n: '#ff8a9a', w: '#ffffff', p: '#1d1d2b' };
+const HOP_PAL = { k: '#3a1020', r: '#ff5e5b', l: '#ffa59a', h: '#ffe4de', d: '#d8434a', D: '#a82a3c', n: '#ff98a8', w: '#ffffff', p: '#1d1d2b' };
 
 const SLIME = [
   '................',
   '................',
   '................',
   '................',
-  '................',
-  '................',
-  '....kkkkkkkk....',
-  '...kggllggggk...',
-  '..kgllgggggggk..',
+  '.......kk.......',
+  '......kllk......',
+  '.....klhggk.....',
+  '...kklhlgggkk...',
+  '..kglhggkgkggk..',
   '..kgggwpgwpggk..',
   '..kgggwpgwpggk..',
-  '.kgggggggggggggk',
-  '.kgggggggggggggk',
+  '.kgggggggggggdgk',
+  '.kggggggkkgggdgk',
   '.kdgggggggggggdk',
   '.kddddddddddddk.',
   '..kkkkkkkkkkkk..',
 ];
-const SLIME_PAL = { k: '#1e3a17', g: '#4fbf3f', l: '#a6ec8f', d: '#2f8a2a', w: '#ffffff', p: '#123' };
-const HOPPER_PAL = { ...SLIME_PAL, k: '#14284a', g: '#4aa3ff', l: '#a9d8ff', d: '#2a6fc0' };
+const SLIME_PAL = { k: '#1e3a17', g: '#4fbf3f', l: '#a6ec8f', h: '#e4ffd8', d: '#2f8a2a', w: '#ffffff', p: '#123' };
+// Hopper: the slime's body with a springy curl on top, so it still differs by shape, not just colour.
+const HOPPER = [
+  '................',
+  '................',
+  '........kkk.....',
+  '.......k..lk....',
+  '.......kl.k.....',
+  '.......kllk.....',
+  '.....klhggk.....',
+  '...kklhlgggkk...',
+  '..kglhggkgkggk..',
+  '..kgggwpgwpggk..',
+  '..kgggwpgwpggk..',
+  '.kgggggggggggdgk',
+  '.kggggggkkgggdgk',
+  '.kdgggggggggggdk',
+  '.kddddddddddddk.',
+  '..kkkkkkkkkkkk..',
+];
+const HOPPER_PAL = { ...SLIME_PAL, k: '#14284a', g: '#4aa3ff', l: '#a9d8ff', h: '#e6f4ff', d: '#2a6fc0' };
 
 // Gloop Knight: a slime in a tin helmet (§4.3).
 const HELMET = [
-  '................',
-  '................',
-  '................',
+  '........ppp.....',
+  '.......pPPp.....',
+  '......kpPpk.....',
   '.....kkkkkk.....',
   '....kssllssk....',
   '...ksslsssssk...',
   '...ksssssssssk..',
   '..kkkkkkkkkkkk..',
 ];
-const HELMET_PAL = { s: '#b9c0cc', l: '#eef2f7', k: '#4a5060' };
+const HELMET_PAL = { s: '#b9c0cc', l: '#eef2f7', k: '#4a5060', p: '#a8243a', P: '#ff5e5b' };
 const KNIGHT_PAL = { ...SLIME_PAL, k: '#2a1e3a', g: '#9b6bd6', l: '#d4b8ff', d: '#6a45a0' };
+
+// Helmet chars are remapped to digits so they don't collide with the slime palette.
+const HELMET_KEYS = { s: '1', l: '2', k: '3', p: '4', P: '5' };
+const helmetGrid = HELMET.map((r) => r.replace(/[slkpP]/g, (c) => HELMET_KEYS[c]));
+const helmetPal = Object.fromEntries(Object.entries(HELMET_KEYS).map(([c, d]) => [d, HELMET_PAL[c]]));
 
 /** Draw `top` over `base` wherever `top` isn't '.'. Both are char grids. */
 const overlay = (base, top) =>
@@ -103,6 +126,8 @@ export const FRAMES = {
 };
 /** Add to a hop_* frame for the "Golden Hop" palette (§4.4). */
 export const GOLD = 24;
+/** Pickups, after the Golden Hop frames: four coin spin frames, then gem and heart. */
+export const PICKUP_FRAMES = { coin: 30, gem: 34, heart: 35 };
 
 // Painted creatures (procedural, so shapes stay easy to tweak).
 const OUT = '#1d1d2b';
@@ -227,7 +252,61 @@ const goo = (ctx, o) => {
   px(ctx, o + 6, 7, 2, 1, '#d2f59c');
 };
 
-const GOLD_PAL = { ...HOP_PAL, k: '#5a3a00', r: '#ffd23f', l: '#fff3b0', d: '#d99a00', n: '#ffb627' };
+// --- Pickups (§4.4): outlined, so they pop against every backdrop ---
+
+/** One coin spin frame: `w` is the visible width (10 = face on, 2 = edge on). */
+const coin = (w) => (ctx, o) => {
+  const cx = o + 8;
+  const top = 5;
+  const h = 11;
+  ellipse(ctx, cx, top + 5, w / 2 + 1, 6, '#7a5200');
+  ellipse(ctx, cx, top + 5, w / 2, 5, '#ffd23f');
+  if (w >= 6) {
+    ellipse(ctx, cx, top + 5, w / 2 - 2, 3, '#e8a91a'); // inner ring
+    ellipse(ctx, cx, top + 5, w / 2 - 3, 2, '#ffd23f');
+    px(ctx, cx - 1, top + 3, 1, 4, '#fff6b0'); // embossed mark
+  }
+  px(ctx, Math.round(cx - w / 2), top + 2, 1, h - 6, '#fff6b0'); // rim shine
+};
+
+/** Faceted Sun Gem: a wide crown over a long point, four facets around a lit centre line. */
+const GEM_HALF = [1, 2, 3, 4, 4, 3, 3, 2, 2, 1, 1, 0]; // half-width per row, top to bottom
+const gem = (ctx, o) => {
+  const cx = o + 8;
+  const top = 3;
+  GEM_HALF.forEach((half, y) => px(ctx, cx - half - 1, top + y, half * 2 + 3, 1, '#7a3a00'));
+  px(ctx, cx - 2, top - 1, 5, 1, '#7a3a00');
+  px(ctx, cx - 1, top + GEM_HALF.length, 3, 1, '#7a3a00');
+  GEM_HALF.forEach((half, y) => {
+    const crown = y < 4;
+    px(ctx, cx - half, top + y, half + 1, 1, crown ? '#fff1b0' : '#ffb627');
+    px(ctx, cx + 1, top + y, half, 1, crown ? '#ffd23f' : '#e8890c');
+  });
+  px(ctx, cx - 4, top + 3, 9, 1, '#c96a00'); // girdle line between crown and point
+  px(ctx, cx, top + 1, 1, 8, '#fffbe6');
+};
+
+const HEART = [
+  '................',
+  '................',
+  '................',
+  '..kkk....kkk....',
+  '.krrrk..krrrk...',
+  'krwwrrkkrrrrrk..',
+  'krwrrrrrrrrrrk..',
+  'krrrrrrrrrrrdk..',
+  '.krrrrrrrrrdk...',
+  '..krrrrrrrdk....',
+  '...krrrrrdk.....',
+  '....krrrdk......',
+  '.....krdk.......',
+  '......kk........',
+  '................',
+  '................',
+].map((row) => `.${row.slice(0, 15)}`);
+const HEART_PAL = { k: '#6a1030', r: '#ff5e7a', w: '#ffd0da', d: '#d03a5c' };
+
+const GOLD_PAL = { ...HOP_PAL, k: '#5a3a00', r: '#ffd23f', l: '#fff3b0', h: '#fffbe6', d: '#e0a400', D: '#b07a00', n: '#ffb627' };
 
 let sheet = null;
 
@@ -242,11 +321,10 @@ export const characters = () => {
     [withEyes(EYES.hurt), HOP_PAL],
     [withEyes(EYES.slide), HOP_PAL],
     [SLIME, SLIME_PAL],
-    [SLIME, HOPPER_PAL],
-    // Helmet chars are upper-case so they don't collide with the slime palette.
-    [overlay(SLIME, HELMET.map((r) => r.replace(/[skl]/g, (c) => c.toUpperCase()))), { ...KNIGHT_PAL, S: HELMET_PAL.s, L: HELMET_PAL.l, K: HELMET_PAL.k }],
+    [HOPPER, HOPPER_PAL],
+    [overlay(SLIME, helmetGrid), { ...KNIGHT_PAL, ...helmetPal }],
     [SLIME, { ...KNIGHT_PAL, g: '#c05bd6', d: '#8a3aa0' }],
-    [HELMET.map((r) => r.replace(/[skl]/g, (c) => c.toUpperCase())), { S: HELMET_PAL.s, L: HELMET_PAL.l, K: HELMET_PAL.k }],
+    [helmetGrid, helmetPal],
     thornback,
     batSleep,
     batUp,
@@ -261,11 +339,21 @@ export const characters = () => {
     rock,
     goo,
     ...['idle', 'blink', 'up', 'down', 'hurt', 'slide'].map((e) => [withEyes(EYES[e]), GOLD_PAL]),
+    coin(10),
+    coin(6),
+    coin(2),
+    coin(6),
+    gem,
+    [HEART, HEART_PAL],
   ];
-  if (art.length !== GOLD + 6) throw new Error('characters: frame table out of sync');
-  const image = canvas(16 * art.length, 16, (ctx) =>
-    art.forEach((a, i) => (typeof a === 'function' ? a(ctx, i * 16) : grid(ctx, a[0], a[1], i * 16, 0))),
+  if (art.length !== PICKUP_FRAMES.heart + 1) throw new Error('characters: frame table out of sync');
+  for (const a of art) if (Array.isArray(a) && a[0].some((row) => row.length !== 16)) throw new Error('characters: grid row is not 16 wide');
+  sheet = paddedSheet(
+    art.length,
+    16,
+    16,
+    (ctx, ox, i) => (typeof art[i] === 'function' ? art[i](ctx, ox) : grid(ctx, art[i][0], art[i][1], ox, 0)),
+    { originX: 0.5, originY: 1 },
   );
-  sheet = new SpriteSheet(image, { frameW: 16, frameH: 16, originX: 0.5, originY: 1 });
   return sheet;
 };

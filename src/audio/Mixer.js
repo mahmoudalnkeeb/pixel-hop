@@ -1,6 +1,6 @@
 // Music / SFX / UI buses with ducking and synthesized voices (GDD §8.5).
-// h3-engine 0.2.0's Audio has one master volume (§10, P0 engine gap), so the game builds
-// its own buses on the engine's AudioContext. Move this into the engine's Audio when it grows buses.
+// The buses are the engine's `audio.bus()` gains, so the engine's master volume and mute apply.
+// `voice` stays here because the step sequencer needs scheduled start times and a sustain envelope.
 
 const RAMP = 0.08; // s, duck/restore without clicks
 const NOISE_SECONDS = 1;
@@ -26,9 +26,8 @@ export class Mixer {
   _build(ctx) {
     this.buses = {};
     for (const name of Object.keys(this.levels)) {
-      const gain = ctx.createGain();
+      const gain = this.audio.bus(name);
       gain.gain.value = this.levels[name];
-      gain.connect(ctx.destination);
       this.buses[name] = gain;
     }
     const length = ctx.sampleRate * NOISE_SECONDS;

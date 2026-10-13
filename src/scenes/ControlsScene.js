@@ -38,43 +38,42 @@ export class ControlsScene extends ListScene {
     return rows;
   }
 
-  /** Wait for the next real key press (the engine's Input doesn't expose which code was pressed). */
+  /** Bind the next key pressed to `action`; `update` reads it from the engine's `pressedCodes`. */
   listen(action, keys) {
     this.waiting = action;
-    this._onKey = (e) => {
-      e.preventDefault();
-      window.removeEventListener('keydown', this._onKey, true);
-      const code = e.code;
-      this.waiting = null;
-      if (code === 'Escape') return;
-      const current = keysFor(action);
-      const next = action === 'jump' ? [code, ...current.filter((c) => c !== code)].slice(0, 2) : [code];
-      keys[action] = next;
-      // A key can only do one thing: remove it from other actions.
-      for (const other of Object.keys(ACTIONS)) {
-        if (other === action) continue;
-        const list = (keys[other] ?? defaultKeys(other)).filter((c) => c !== code);
-        keys[other] = list.length ? list : defaultKeys(other).filter((c) => c !== code);
-      }
-      applyKeys(keys);
-      writeSave(this.save);
-      sfx('ui_confirm');
-      this.swallow = true;
-    };
-    window.addEventListener('keydown', this._onKey, true);
+    this.keys = keys;
+  }
+
+  bind(action, keys, code) {
+    const current = keysFor(action);
+    keys[action] = action === 'jump' ? [code, ...current.filter((c) => c !== code)].slice(0, 2) : [code];
+    // A key can only do one thing: remove it from other actions.
+    for (const other of Object.keys(ACTIONS)) {
+      if (other === action) continue;
+      const list = (keys[other] ?? defaultKeys(other)).filter((c) => c !== code);
+      keys[other] = list.length ? list : defaultKeys(other).filter((c) => c !== code);
+    }
+    applyKeys(keys);
+    writeSave(this.save);
+    sfx('ui_confirm');
   }
 
   update(dt, ctx) {
-    if (this.waiting) return;
-    if (this.swallow) {
-      this.swallow = false; // the rebinding key press shouldn't also act in the menu
+    if (!this.waiting) {
+      super.update(dt, ctx);
       return;
     }
-    super.update(dt, ctx);
-  }
-
-  exit() {
-    if (this._onKey) window.removeEventListener('keydown', this._onKey, true);
+    // Touch buttons feed fake codes into the same set; only a real key can be bound, and any touch cancels.
+    const codes = [...ctx.input.pressedCodes];
+    if (this.game.touch?.takeTap() || codes.some((c) => c.startsWith('Touch'))) {
+      this.waiting = null;
+      return;
+    }
+    const code = codes.find((c) => !c.startsWith('Touch'));
+    if (!code) return;
+    const action = this.waiting;
+    this.waiting = null;
+    if (code !== 'Escape') this.bind(action, this.keys, code);
   }
 
   render(r) {

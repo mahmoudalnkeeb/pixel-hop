@@ -7,6 +7,7 @@ import { Menu } from '../ui/Menu.js';
 /** Offered once after 5 deaths in one boss phase (§6.4). Never forced; nothing is lost by accepting (§9.5). */
 export class AssistScene extends Scene {
   enter() {
+    this.taps = true; // touch: tap a menu item to choose it
     this.menu = new Menu([
       { text: 'Turn on Assist (85% speed, 5 hearts)', value: 'yes' },
       { text: 'No thanks', value: 'no' },
@@ -14,7 +15,7 @@ export class AssistScene extends Scene {
   }
 
   update(_dt, ctx) {
-    const choice = this.menu.update(ctx);
+    const choice = this.menu.update(ctx, this.game.touch?.takeTap());
     if (!choice) return;
     if (choice === 'yes') {
       const save = loadSave();

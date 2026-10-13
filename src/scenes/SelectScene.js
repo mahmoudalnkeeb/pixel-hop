@@ -1,5 +1,7 @@
 import { Scene } from '../../vendor/h3-engine.min.js';
 import { characters, FRAMES } from '../art/characters.js';
+import { groundFrame, OPEN, shade, tiles } from '../art/tiles.js';
+import { panel } from '../ui/panel.js';
 import { BACK, BUILT_LEVELS, CONFIRM, LEFT, LEVEL_NAMES, LEVELS, RIGHT, VIEW_H, VIEW_W, WORLDS } from '../config.js';
 import { levelRecord, loadSave } from '../save.js';
 import { sfx } from '../sfx.js';
@@ -7,11 +9,29 @@ import { formatTime } from '../ui/hud.js';
 import { label } from '../ui/label.js';
 
 const WORLD_OF = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5];
-const node = (i) => ({ x: 26 + i * 29.8, y: 78 + (i % 2 === 0 ? 0 : -16) + (i >= 8 ? -8 : 0) });
+// Laid out for 320 px and centred in wider views.
+const node = (i) => ({ x: (VIEW_W - 320) / 2 + 26 + i * 29.8, y: 78 + (i % 2 === 0 ? 0 : -16) + (i >= 8 ? -8 : 0) });
+
+/** A crisp pixel disc, row by row (canvas arcs are anti-aliased). */
+const disc = (r, cx, cy, radius, color) => {
+  for (let dy = -radius; dy <= radius; dy++) {
+    const half = Math.round(Math.sqrt(radius * radius - dy * dy));
+    r.rect(cx - half, cy + dy, half * 2 + 1, 1, color);
+  }
+};
+
+/** A rounded hill silhouette standing on `base`. */
+const hill = (r, cx, base, rx, ry, color) => {
+  for (let dy = 0; dy < ry; dy++) {
+    const half = Math.round(rx * Math.sqrt(1 - (dy / ry) ** 2));
+    r.rect(cx - half, base - ry + (ry - dy) - 1, half * 2, 1, color);
+  }
+};
 
 /** World map with 10 nodes, medals per level, and locked levels greyed out (§9.1). Takes `{ level }` to start the cursor there. */
 export class SelectScene extends Scene {
   enter({ level } = {}) {
+    this.taps = true; // touch: tap a level to select it, tap it again to play
     this.ctx.renderer.background = '#1c2a3a';
     this.save = loadSave();
     const reachable = Math.min(this.save.unlocked, LEVELS.length) - 1;
@@ -29,6 +49,14 @@ export class SelectScene extends Scene {
 
   update(dt, { input }) {
     this.t += dt;
+    const tap = this.game.touch?.takeTap();
+    const tapped = tap ? LEVELS.findIndex((_, i) => Math.abs(node(i).x - tap.x) < 14 && Math.abs(node(i).y - tap.y) < 16) : -1;
+    // Tapping the selected level again, or the info panel below the map, plays it.
+    const tapAgain = (tapped >= 0 && tapped === this.index) || (tap?.y ?? 0) > 124;
+    if (tapped >= 0 && !tapAgain) {
+      this.index = tapped;
+      sfx('ui_move');
+    }
     const d = (input.justPressed(RIGHT) ? 1 : 0) - (input.justPressed(LEFT) ? 1 : 0);
     if (d) {
       const next = this.index + d;
@@ -37,7 +65,7 @@ export class SelectScene extends Scene {
         sfx('ui_move');
       }
     }
-    if (input.justPressed(CONFIRM)) {
+    if (input.justPressed(CONFIRM) || tapAgain) {
       if (this.status(this.index) === 'open') {
         sfx('ui_confirm');
         this.game.scenes.switch('play', { level: LEVELS[this.index] });
@@ -51,12 +79,16 @@ export class SelectScene extends Scene {
   }
 
   render(r) {
-    // World bands behind the path.
+    // World bands behind the path: a stepped sky, a hill silhouette and the world's own ground tiles.
+    const left = Math.round(node(0).x - 14);
+    panel(r, left - 3, 37, 304, 86, { fill: '#0e0b1c' });
     for (let w = 1; w <= 5; w++) {
       const x0 = Math.round(node((w - 1) * 2).x - 14);
-      r.rect(x0, 40, 60, 80, WORLDS[w].sky);
-      r.rect(x0, 104, 60, 16, WORLDS[w].ground);
-      r.rect(x0, 104, 60, 3, WORLDS[w].top);
+      const sky = WORLDS[w].sky;
+      for (let band = 0; band < 4; band++) r.rect(x0, 40 + band * 16, 60, 16, shade(sky, band * 0.07 - 0.08));
+      for (const [hx, hr] of [[18, 18], [46, 13]]) hill(r, x0 + hx, 104, hr, Math.round(hr * 0.6), shade(sky, -0.25));
+      const sheet = tiles(w);
+      for (let i = 0; i < 4; i++) r.sprite(sheet.frame(groundFrame(OPEN.top, i % 2)), x0 + i * 15, 104);
     }
     label(r, 'HOPSHIRE', VIEW_W / 2, 14, { size: 16, color: '#ffd23f' });
 
@@ -77,8 +109,12 @@ export class SelectScene extends Scene {
       const fill = status === 'open' ? (rec?.cleared ? '#9be36b' : '#ffd23f') : status === 'locked' ? '#6b6b7a' : '#3a3a48';
       const nx = Math.round(x);
       const ny = Math.round(y);
-      r.rect(nx - 6, ny - 4, 12, 8, '#1d1d2b');
-      r.rect(nx - 5, ny - 3, 10, 6, fill);
+      // A map pin: a pale stone ringed in the level's status colour; the selected one pulses.
+      if (i === this.index) disc(r, nx, ny, 7 + Math.round(Math.abs(Math.sin(this.t * 4))), 'rgba(255,255,255,0.35)');
+      disc(r, nx, ny, 6, '#1d1d2b');
+      disc(r, nx, ny, 5, fill);
+      disc(r, nx, ny, 3, status === 'open' ? '#f4ecd8' : '#8a8494');
+      r.rect(nx - 1, ny - 2, 2, 1, '#ffffff');
       label(r, LEVELS[i], nx, ny + 6, { color: status === 'soon' ? '#888' : '#fff' });
       if (i === LEVELS.length - 1) {
         r.rect(nx - 4, ny - 9, 8, 3, '#ffd23f'); // the King's crown marks the throne
@@ -99,7 +135,7 @@ export class SelectScene extends Scene {
     const id = LEVELS[i];
     const status = this.status(i);
     const y = 128;
-    r.rect(20, y - 4, VIEW_W - 40, 50, 'rgba(10,10,30,0.85)');
+    panel(r, 20, y - 6, VIEW_W - 40, 52);
     label(r, `${id}. ${LEVEL_NAMES[i]}`, VIEW_W / 2, y, { color: WORLDS[WORLD_OF[i]].accent });
     if (status === 'soon') {
       label(r, 'Coming soon', VIEW_W / 2, y + 16, { color: '#aab' });
@@ -117,6 +153,6 @@ export class SelectScene extends Scene {
     if (i < 9) medals.push(`Par ${rec.parTime ? '*' : '-'}`);
     label(r, medals.join('   '), VIEW_W / 2, y + 14);
     const best = rec.bestTime === null ? '--:--' : formatTime(rec.bestTime);
-    label(r, `Best ${best}    Enter: play   Esc: title`, VIEW_W / 2, y + 28, { color: '#aab' });
+    label(r, `Best ${best}    ${this.game.touch?.visible ? 'Tap again: play' : 'Enter: play   Esc: title'}`, VIEW_W / 2, y + 28, { color: '#aab' });
   }
 }

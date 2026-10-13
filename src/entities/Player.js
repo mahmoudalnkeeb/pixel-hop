@@ -1,8 +1,9 @@
 import { approach, Entity } from '../../vendor/h3-engine.min.js';
 import {
-  ACCEL_AIR, ACCEL_GROUND, COYOTE_TIME, DEATH_TIME, DOWN, DROP_THROUGH_TIME, FLICKER_HZ, FRICTION, GRAVITY,
-  INVULN_TIME, JUMP, JUMP_BUFFER, JUMP_CUT, JUMP_SPEED, KNOCKBACK_VX, KNOCKBACK_VY, LAND_SQUASH_SPEED, LEFT,
-  MAX_FALL, MAX_HEARTS, PLAYER_H, PLAYER_W, RIGHT, RUN_SPEED, SHAKE_HURT, SPRING_SPEED, SWITCH_STOMP_SPEED, T,
+  ACCEL_AIR, ACCEL_GROUND, APEX_GRAVITY, APEX_SPEED, COYOTE_TIME, DEATH_TIME, DOWN, DROP_THROUGH_TIME, FALL_GRAVITY,
+  FLICKER_HZ, FRICTION, GRAVITY, INVULN_TIME, JUMP, JUMP_BUFFER, JUMP_CUT_SPEED, JUMP_MIN_TIME, JUMP_SPEED, KNOCKBACK_VX,
+  KNOCKBACK_VY, LAND_SQUASH_SPEED, LEFT, MAX_FALL, MAX_HEARTS, NUDGE, PLAYER_H, PLAYER_W, RIGHT, RUN_SPEED, SHAKE_HURT,
+  SPRING_SPEED, SWITCH_STOMP_SPEED, T,
   UPDRAFT_MAX, WALL_COYOTE, WALL_JUMP_LOCK, WALL_JUMP_VX, WALL_JUMP_VY, WALL_SLIDE_MAX, WIND_DRIFT,
 } from '../config.js';
 import { characters, FRAMES, GOLD } from '../art/characters.js';
@@ -36,6 +37,8 @@ export class Player extends Entity {
     this.buffer = 0;
     this.dropTimer = 0;
     this.noCut = false; // springs, stomps and knockback ignore the jump cut
+    this.jumpTime = 0; // seconds since the last jump, for JUMP_MIN_TIME
+    this.nudge = NUDGE; // Level.moveAndCollide: corner correction and ledge assist
     this.wallCoyote = 0;
     this.wallSide = 0;
     this.wallLock = 0;
@@ -56,6 +59,7 @@ export class Player extends Entity {
     if (this.state === 'dying') return this._updateDying(dt);
     if (this.invuln > 0) this.invuln -= dt;
     if (this.dropTimer > 0) this.dropTimer -= dt;
+    this.jumpTime += dt;
 
     // Ride moving platforms: apply their movement before ours.
     if (this.onGround && this.platform) {
@@ -66,14 +70,15 @@ export class Player extends Entity {
     let dir = this.state === 'play' ? input.axis(LEFT, RIGHT) : 0;
     const jumpHeld = this.state === 'play' && input.isDown(JUMP);
     const jumpPressed = this.state === 'play' && input.justPressed(JUMP);
+    if (dir !== 0 && this.wallLock <= 0) this.facing = dir;
+
+    // A wall jump's kick is fixed for WALL_JUMP_LOCK, so every wall jump clears the wall the same way.
     if (this.wallLock > 0) {
       this.wallLock -= dt;
-      if (dir === this.wallSide) dir = 0;
+    } else {
+      const accel = dir !== 0 ? (this.onGround ? ACCEL_GROUND : ACCEL_AIR) : this.onGround ? FRICTION : ACCEL_AIR / 2;
+      this.vel.x = approach(this.vel.x, dir * RUN_SPEED, accel * dt);
     }
-    if (dir !== 0) this.facing = dir;
-
-    const accel = dir !== 0 ? (this.onGround ? ACCEL_GROUND : ACCEL_AIR) : this.onGround ? FRICTION : ACCEL_AIR / 2;
-    this.vel.x = approach(this.vel.x, dir * RUN_SPEED, accel * dt);
 
     // Walls: wall-jumpable tiles directly beside Hop while airborne (§3.2).
     const touchL = this.canWallJump && !this.onGround && level.wallAt(this, -1);
@@ -88,9 +93,11 @@ export class Player extends Entity {
     this.coyote = this.onGround ? COYOTE_TIME : this.coyote - dt;
     this.buffer = jumpPressed ? JUMP_BUFFER : this.buffer - dt;
     if (this.buffer > 0) {
-      if (this.onGround && input.isDown(DOWN) && (this.platform || level.onOneWayOnly(this))) {
+      // Only one-way tiles can be dropped through (§3.1); on a moving platform ↓ + Jump is just a jump.
+      if (this.onGround && input.isDown(DOWN) && !this.platform && level.onOneWayOnly(this)) {
         this._dropThrough();
       } else if (this.coyote > 0) {
+        if (this.onGround) this.scene.dust?.(this.cx, this.pos.y + this.h, 3);
         this.jump(JUMP_SPEED);
         sfx('jump');
       } else if (this.wallCoyote > 0) {
@@ -100,10 +107,16 @@ export class Player extends Entity {
     }
 
     if (this.vel.y >= 0) this.noCut = false;
-    const cut = this.vel.y < 0 && !jumpHeld && !this.noCut;
-    this.vel.y = Math.min(this.vel.y + GRAVITY * (cut ? JUMP_CUT : 1) * dt, MAX_FALL);
+    // Hard jump cut: letting go stops the rise almost at once, instead of a slow float.
+    if (this.vel.y < -JUMP_CUT_SPEED && !jumpHeld && !this.noCut && this.jumpTime >= JUMP_MIN_TIME) this.vel.y = -JUMP_CUT_SPEED;
+    let gravity = this.vel.y > 0 ? FALL_GRAVITY : GRAVITY;
+    if (jumpHeld && Math.abs(this.vel.y) < APEX_SPEED) gravity = GRAVITY * APEX_GRAVITY;
+    this.vel.y = Math.min(this.vel.y + gravity * dt, MAX_FALL);
 
-    this.sliding = this.vel.y > 0 && ((touchR && dir > 0) || (touchL && dir < 0));
+    // Once sliding, Hop clings until he pushes away or the wall ends; he doesn't have to keep holding toward it.
+    const toward = (touchR && dir > 0) || (touchL && dir < 0);
+    const sameWall = this.wallSide > 0 ? touchR : touchL;
+    this.sliding = this.vel.y > 0 && (toward || (this.sliding && sameWall && dir !== -this.wallSide));
     if (this.sliding) {
       this.vel.y = Math.min(this.vel.y, WALL_SLIDE_MAX);
       this.slideSfx -= dt;
@@ -161,6 +174,7 @@ export class Player extends Entity {
 
   jump(speed) {
     this.vel.y = -speed;
+    this.jumpTime = 0;
     this.buffer = 0;
     this.coyote = 0;
     this.wallCoyote = 0;
