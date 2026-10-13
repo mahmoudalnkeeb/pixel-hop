@@ -1,5 +1,4 @@
-import { SpriteSheet } from '../../vendor/h3-engine.min.js';
-import { canvas, ellipse, px } from './paint.js';
+import { ellipse, paddedSheet, px } from './paint.js';
 
 // Small decorations scattered by Level over exposed ground (§7): "top" pieces stand on a surface
 // (drawn in the empty tile above it, anchored to its bottom); "hang" pieces dangle under a ledge
@@ -158,8 +157,8 @@ export const decor = (world) => {
   if (sheets.has(world)) return sheets.get(world);
   const set = SETS[world] ?? SETS[1];
   const painters = [...set.top, ...set.hang];
-  const image = canvas(16 * painters.length, 16, (ctx) => painters.forEach((paint, i) => paint(ctx, i * 16)));
-  const out = { sheet: new SpriteSheet(image, { frameW: 16, frameH: 16 }), top: set.top.length, hang: set.hang.length };
+  const sheet = paddedSheet(painters.length, 16, 16, (ctx, ox, i) => painters[i](ctx, ox));
+  const out = { sheet, top: set.top.length, hang: set.hang.length };
   sheets.set(world, out);
   return out;
 };

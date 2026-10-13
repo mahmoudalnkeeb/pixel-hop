@@ -1,5 +1,4 @@
-import { SpriteSheet } from '../../vendor/h3-engine.min.js';
-import { canvas, ellipse, grid, px } from './paint.js';
+import { ellipse, grid, paddedSheet, px } from './paint.js';
 
 // One shared 16×16 characters sheet (§7: few shared sheets keep Canvas 2D batching intact).
 // Frames face right; draw with flipX to face left.
@@ -349,9 +348,12 @@ export const characters = () => {
   ];
   if (art.length !== PICKUP_FRAMES.heart + 1) throw new Error('characters: frame table out of sync');
   for (const a of art) if (Array.isArray(a) && a[0].some((row) => row.length !== 16)) throw new Error('characters: grid row is not 16 wide');
-  const image = canvas(16 * art.length, 16, (ctx) =>
-    art.forEach((a, i) => (typeof a === 'function' ? a(ctx, i * 16) : grid(ctx, a[0], a[1], i * 16, 0))),
+  sheet = paddedSheet(
+    art.length,
+    16,
+    16,
+    (ctx, ox, i) => (typeof art[i] === 'function' ? art[i](ctx, ox) : grid(ctx, art[i][0], art[i][1], ox, 0)),
+    { originX: 0.5, originY: 1 },
   );
-  sheet = new SpriteSheet(image, { frameW: 16, frameH: 16, originX: 0.5, originY: 1 });
   return sheet;
 };

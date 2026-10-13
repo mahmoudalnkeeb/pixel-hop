@@ -1,5 +1,4 @@
-import { SpriteSheet } from '../../vendor/h3-engine.min.js';
-import { canvas, ellipse, px } from './paint.js';
+import { ellipse, paddedSheet, px } from './paint.js';
 
 // King Gloop, drawn 56×48 around a 48×40 hitbox (§6.1).
 const W = 56;
@@ -115,15 +114,17 @@ let sheet = null;
 export const bossSheet = () => {
   if (sheet) return sheet;
   const painters = [face('idle'), face('tell'), face('dazed'), face('roar')];
-  const image = canvas(W * (painters.length + 1), H, (ctx) => {
-    painters.forEach((paint, i) => paint(ctx, i * W));
+  const paint = (ctx, ox, i) => {
+    if (i < painters.length) {
+      painters[i](ctx, ox);
+      return;
+    }
     // Hit flash: the idle silhouette in white.
-    const flash = W * painters.length;
-    face('idle')(ctx, flash);
+    face('idle')(ctx, ox);
     ctx.globalCompositeOperation = 'source-atop';
-    px(ctx, flash, 0, W, H, '#ffffff');
+    px(ctx, ox, 0, W, H, '#ffffff');
     ctx.globalCompositeOperation = 'source-over';
-  });
-  sheet = new SpriteSheet(image, { frameW: W, frameH: H, originX: 0.5, originY: 1 });
+  };
+  sheet = paddedSheet(painters.length + 1, W, H, paint, { originX: 0.5, originY: 1 });
   return sheet;
 };

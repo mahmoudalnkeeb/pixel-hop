@@ -1,6 +1,5 @@
-import { SpriteSheet } from '../../vendor/h3-engine.min.js';
 import { WORLDS } from '../config.js';
-import { canvas, hash2, px } from './paint.js';
+import { hash2, paddedSheet, px } from './paint.js';
 
 // One 16×16 tile sheet per world, painted from the world palette (§5.2, §7).
 // Ground tiles are autotiled: each exposed side gets an edge (outline, rim light or shadow), an
@@ -349,8 +348,7 @@ export const tiles = (world) => {
   for (let mask = 0; mask < 16; mask++) {
     for (let v = 0; v < VARIANTS; v++) painters[groundFrame(mask, v)] = (ctx, ox) => ground(ctx, ox, pal, material, mask, v);
   }
-  const image = canvas(16 * painters.length, 16, (ctx) => painters.forEach((paint, i) => paint?.(ctx, i * 16)));
-  const sheet = new SpriteSheet(image, { frameW: 16, frameH: 16 });
+  const sheet = paddedSheet(painters.length, 16, 16, (ctx, ox, i) => painters[i]?.(ctx, ox));
   sheets.set(world, sheet);
   return sheet;
 };

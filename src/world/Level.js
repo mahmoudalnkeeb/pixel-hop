@@ -14,6 +14,8 @@ const TILE_CHARS = '.#B-^%RU<>';
 // Solid tiles Hop can wall-slide on (§4.2: never crumble or switch blocks).
 const isWallTile = (t) => t === '#' || t === 'B';
 
+const STRIP_COLS = 16; // level tiles are pre-rendered in strips this many columns wide
+const STRIP_PX = STRIP_COLS * T;
 const POCKET_MAX = 24; // cells; a bigger enclosed space behind a fake wall is a room, not a pocket
 const UP = [[0, -1]];
 const SIDEWAYS = [[1, 0], [-1, 0]];
@@ -66,6 +68,7 @@ export class Level extends Entity {
     this.grid[r][c] = ch;
     this.frames = this._tileFrames();
     this.decor = this._decorFrames();
+    this.strips?.clear(); // autotiling around the change may differ; strips repaint on next draw
   }
 
   /** Is this tile character solid right now? */
@@ -330,8 +333,15 @@ export class Level extends Entity {
   }
 
   /** Draw only the tiles inside the camera view. Fake walls are drawn by `FakeWalls`, above the player. */
+  /**
+   * Static tiles and decorations are drawn from pre-rendered strips; switch blocks, which change,
+   * are drawn tile by tile on top. Fake walls are drawn by `FakeWalls`, above the player.
+   */
   render(r) {
     const view = this.scene.camera.view;
+    const s0 = Math.max(0, Math.floor(view.x / STRIP_PX));
+    const s1 = Math.min(Math.ceil(this.cols / STRIP_COLS) - 1, Math.floor((view.x + view.w) / STRIP_PX));
+    for (let s = s0; s <= s1; s++) r.image(this._strip(s), s * STRIP_PX, 0);
     const c0 = Math.max(0, Math.floor(view.x / T));
     const c1 = Math.min(this.cols - 1, Math.floor((view.x + view.w) / T));
     const r0 = Math.max(0, Math.floor(view.y / T));
@@ -339,14 +349,47 @@ export class Level extends Entity {
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
         const t = this.grid[row][col];
+        if (t === 'R' || t === 'U') this.drawTile(r, t, col, row);
+      }
+    }
+  }
+
+  /**
+   * One strip of STRIP_COLS columns, painted 1:1 on first use. Drawing tiles one by one at a
+   * fractional screen scale (phones) leaves faint lines where their softened edges meet; a strip
+   * has no inner edges. Each strip also paints the next strip's first column, which that strip
+   * then covers exactly, so the edge between strips can't show through either.
+   */
+  _strip(s) {
+    this.strips ??= new Map();
+    let strip = this.strips.get(s);
+    if (strip) return strip;
+    strip = document.createElement('canvas');
+    strip.width = STRIP_PX + T;
+    strip.height = this.rows * T;
+    const ctx = strip.getContext('2d');
+    const sheet = tiles(this.world);
+    const props = decor(this.world).sheet;
+    const draw = (f, x, y) => ctx.drawImage(f.image, f.sx, f.sy, f.sw, f.sh, x, y, f.sw, f.sh);
+    for (let col = s * STRIP_COLS; col <= Math.min(this.cols - 1, (s + 1) * STRIP_COLS); col++) {
+      const x = col * T - s * STRIP_PX;
+      for (let row = 0; row < this.rows; row++) {
+        const t = this.grid[row][col];
         if (t === '.') {
           const d = this.decor[row][col];
-          if (d >= 0) r.sprite(decor(this.world).sheet.frame(d), col * T, row * T);
-        } else if (t !== '%') {
-          this.drawTile(r, t, col, row);
+          if (d >= 0) draw(props.frame(d), x, row * T);
+        } else if (t !== '%' && t !== 'R' && t !== 'U') {
+          const frame = this.frames[row][col];
+          if (frame >= 0) draw(sheet.frame(frame), x, row * T);
+          else {
+            ctx.fillStyle = '#ff00ff'; // tile not implemented yet
+            ctx.fillRect(x, row * T, T, T);
+          }
         }
       }
     }
+    this.strips.set(s, strip);
+    return strip;
   }
 
   /** Sprite frame for each tile, chosen once at load (grass on exposed tops, variants by position). */
