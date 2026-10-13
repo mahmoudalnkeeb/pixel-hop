@@ -1,5 +1,8 @@
 import { Entity } from '../../vendor/h3-engine.min.js';
+import { characters, PICKUP_FRAMES } from '../art/characters.js';
 import { T } from '../config.js';
+
+const GHOST = { alpha: 0.45 };
 
 /** Things Hop collects by touching (§4.4). The play scene calls `collect` and applies the effect by `kind`. */
 class Pickup extends Entity {
@@ -20,13 +23,8 @@ export class Coin extends Pickup {
   }
 
   render(r) {
-    // Spin by narrowing the coin.
-    const w = Math.max(2, Math.round(Math.abs(Math.cos(this.t * 4)) * 8));
-    const x = Math.round(this.cx - w / 2);
-    const y = Math.round(this.pos.y);
-    r.rect(x, y, w, 10, '#ffd23f');
-    if (w > 3) r.rect(x + 1, y + 1, 1, 8, '#fff6b0');
-    r.rect(x, y + 9, w, 1, '#c99a12');
+    const spin = Math.floor(this.t * 8) % 4;
+    r.sprite(characters().frame(PICKUP_FRAMES.coin + spin), Math.round(this.cx), Math.round(this.pos.y + this.h + 1));
   }
 }
 
@@ -40,12 +38,14 @@ export class Gem extends Pickup {
 
   render(r) {
     const cx = Math.round(this.cx);
-    const cy = Math.round(this.cy + Math.sin(this.t * 3) * 1.5);
-    if (this.ghost) r.alpha = 0.45; // already found on an earlier run
-    r.poly([cx, cy - 6, cx + 5, cy, cx, cy + 6, cx - 5, cy], '#ffb627');
-    r.poly([cx, cy - 6, cx + 5, cy, cx, cy], '#ffe08a');
-    if (Math.sin(this.t * 5) > 0.8) r.rect(cx - 1, cy - 9, 2, 2, '#fff');
-    r.alpha = 1;
+    const bottom = Math.round(this.pos.y + this.h + 1 + Math.sin(this.t * 3) * 1.5);
+    // Already found on an earlier run: a faint ghost (§4.4).
+    r.sprite(characters().frame(PICKUP_FRAMES.gem), cx, bottom, this.ghost ? GHOST : undefined);
+    if (Math.sin(this.t * 5) > 0.8) {
+      // Twinkle: a small cross above the gem.
+      r.rect(cx + 2, bottom - 16, 1, 3, '#fff');
+      r.rect(cx + 1, bottom - 15, 3, 1, '#fff');
+    }
   }
 }
 
@@ -55,16 +55,6 @@ export class Heart extends Pickup {
   }
 
   render(r) {
-    drawHeart(r, Math.round(this.pos.x), Math.round(this.pos.y + Math.sin(this.t * 3)), '#ff5e7a');
+    r.sprite(characters().frame(PICKUP_FRAMES.heart), Math.round(this.cx), Math.round(this.pos.y + this.h + 2 + Math.sin(this.t * 3)));
   }
 }
-
-/** 10×9 pixel heart. */
-export const drawHeart = (r, x, y, color) => {
-  r.rect(x + 1, y, 3, 1, color);
-  r.rect(x + 6, y, 3, 1, color);
-  r.rect(x, y + 1, 10, 3, color);
-  r.rect(x + 1, y + 4, 8, 2, color);
-  r.rect(x + 3, y + 6, 4, 2, color);
-  r.rect(x + 4, y + 8, 2, 1, color);
-};
