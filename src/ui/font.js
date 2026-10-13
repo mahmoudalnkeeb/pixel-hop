@@ -124,9 +124,11 @@ const atlas = (color, shine) => {
   if (atlases.has(key)) return atlases.get(key);
   const cells = new Map();
   let width = 0;
+  // Each cell is the glyph plus its outline, with a transparent column between cells so scaling
+  // never samples a neighbour.
   for (const [ch, g] of glyphs) {
     cells.set(ch, width);
-    width += g.w + 2;
+    width += g.w + 3;
   }
   const canvas = document.createElement('canvas');
   canvas.width = width;

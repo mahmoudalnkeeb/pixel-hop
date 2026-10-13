@@ -44,7 +44,17 @@ export const followWindow = (game) => {
   };
   window.addEventListener('resize', apply);
   window.addEventListener('orientationchange', apply);
-  game.events.on('resize', () => stretch(game));
+  game.events.on('resize', () => afterResize(game));
+  afterResize(game);
+};
+
+/**
+ * h3-engine turns image smoothing on for every scale mode except 'pixel', and resetting the canvas
+ * size resets it too. The view uses 'fit' (for fractional scales on phones) but is pixel art, so
+ * smoothing goes back off after every resize; otherwise sprites blur and atlas neighbours bleed in.
+ */
+const afterResize = (game) => {
+  game.renderer.ctx.imageSmoothingEnabled = false;
   stretch(game);
 };
 
