@@ -30,6 +30,11 @@ export const OPEN = { top: 1, right: 2, bottom: 4, left: 8 };
 /** Frame for a ground tile with the given exposed sides (OPEN bits) and texture variant. */
 export const groundFrame = (mask, variant) => GROUND + mask * VARIANTS + (variant % VARIANTS);
 
+const BRICK = GROUND + 16 * VARIANTS; // first autotiled brick frame
+
+/** Frame for a brick tile with the given exposed sides (OPEN bits). */
+export const brickFrame = (mask) => BRICK + mask;
+
 /** Lighten (amt > 0) or darken (amt < 0) a #rrggbb colour. */
 export const shade = (hex, amt) => {
   const n = parseInt(hex.slice(1), 16);
@@ -192,17 +197,29 @@ const ground = (ctx, ox, pal, material, mask, variant) => {
 
 // --- Other tiles ---
 
-const brick = (ctx, ox, [base, light, dark]) => {
+/**
+ * A brick tile, autotiled like the ground: the courses line up across neighbouring bricks, so a
+ * stack reads as one wall, and only exposed sides get an outline.
+ */
+const brick = (ctx, ox, [base, light, dark], mask) => {
+  const outline = shade(dark, -0.45);
   px(ctx, ox, 0, 16, 16, base);
-  px(ctx, ox, 0, 16, 1, light);
-  for (const y of [7, 15]) px(ctx, ox, y, 16, 1, dark);
+  for (const y of [0, 8]) px(ctx, ox, y, 16, 1, light); // each course catches the light on top
+  for (const y of [7, 15]) px(ctx, ox, y, 16, 1, dark); // mortar between courses
   px(ctx, ox + 7, 0, 1, 7, dark);
   px(ctx, ox + 3, 8, 1, 7, dark);
   px(ctx, ox + 11, 8, 1, 7, dark);
   px(ctx, ox + 1, 2, 2, 1, light);
   px(ctx, ox + 9, 10, 2, 1, light);
-  px(ctx, ox, 0, 1, 16, dark);
-  px(ctx, ox + 15, 0, 1, 16, dark);
+  if (mask & OPEN.top) px(ctx, ox, 0, 16, 1, outline);
+  if (mask & OPEN.bottom) px(ctx, ox, 15, 16, 1, outline);
+  if (mask & OPEN.left) px(ctx, ox, 0, 1, 16, outline);
+  if (mask & OPEN.right) px(ctx, ox + 15, 0, 1, 16, outline);
+  const cut = (x, y) => ctx.clearRect(ox + x, y, 1, 1);
+  if (mask & OPEN.top && mask & OPEN.left) cut(0, 0);
+  if (mask & OPEN.top && mask & OPEN.right) cut(15, 0);
+  if (mask & OPEN.bottom && mask & OPEN.left) cut(0, 15);
+  if (mask & OPEN.bottom && mask & OPEN.right) cut(15, 15);
 };
 
 // One-way ledges: thin, with a clear top edge, styled per world.
@@ -315,8 +332,9 @@ export const tiles = (world) => {
   if (sheets.has(world)) return sheets.get(world);
   const pal = WORLDS[world];
   const material = MATERIAL[world] ?? MATERIAL[1];
-  const painters = new Array(GROUND + 16 * VARIANTS).fill(null);
-  painters[TILE.brick] = (ctx, ox) => brick(ctx, ox, material.brick);
+  const painters = new Array(BRICK + 16).fill(null);
+  painters[TILE.brick] = (ctx, ox) => brick(ctx, ox, material.brick, 15); // a lone brick, all sides exposed
+  for (let mask = 0; mask < 16; mask++) painters[brickFrame(mask)] = (ctx, ox) => brick(ctx, ox, material.brick, mask);
   painters[TILE.oneWay] = LEDGE[material.ledge];
   painters[TILE.spikes] = spikes;
   painters[TILE.redOn] = (ctx, ox) => switchBlock(ctx, ox, '#e8434f', '#8a1f2a', 'dots', true);

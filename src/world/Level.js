@@ -1,6 +1,6 @@
 import { Collision, Entity, Rect } from '../../vendor/h3-engine.min.js';
 import { decor, decorCounts } from '../art/decor.js';
-import { groundFrame, OPEN, tiles, TILE } from '../art/tiles.js';
+import { brickFrame, groundFrame, OPEN, tiles, TILE } from '../art/tiles.js';
 import { hash2 } from '../art/paint.js';
 import { T, WORLDS } from '../config.js';
 
@@ -367,7 +367,7 @@ export class Level extends Entity {
       line.map((t, c) => {
         // Fake walls use the same frames as the ground around them, so they really look like `#`.
         if (t === '#' || t === '%' || this.pockets.has(r * this.cols + c)) return groundFrame(mask(c, r), hash2(c, r) > 0.6 ? 1 : 0);
-        if (t === 'B') return TILE.brick;
+        if (t === 'B') return brickFrame(mask(c, r));
         if (t === '-') return TILE.oneWay;
         if (t === '^') return TILE.spikes;
         if (t === '<') return TILE.cannonL;
