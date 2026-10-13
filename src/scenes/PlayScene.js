@@ -19,7 +19,9 @@ import { Banner, Checkpoint, Flag, Sign, Spring } from '../entities/props.js';
 import { levelRecord, loadSave, writeSave } from '../save.js';
 import { sfx } from '../sfx.js';
 import { Run } from '../telemetry.js';
+import { textWidth } from '../ui/font.js';
 import { drawHud } from '../ui/hud.js';
+import { panel } from '../ui/panel.js';
 import { label } from '../ui/label.js';
 import { Backdrop } from '../world/Backdrop.js';
 import { FakeWalls } from '../world/FakeWalls.js';
@@ -28,6 +30,7 @@ import { Level } from '../world/Level.js';
 const COIN_CHAIN_WINDOW = 0.4;
 const CLEAR_DELAY = 1.2;
 const PAUSE_DUCK = 0.7;
+const HINT_FADE = 6; // 1/s: sign hints fade in or out in about 0.17 s
 const WATCHES = ['vel', 'state', 'ground', 'wall', 'hearts', 'boss'];
 const ENEMIES = { e: Slime, h: Hopper, k: GloopKnight, t: Thornback, b: Bat, d: Dropper, p: Puffer };
 
@@ -57,6 +60,8 @@ export class PlayScene extends Scene {
     this.level = this.add(new Level(this.def));
     if (this.level.unknown.size > 0) console.warn(`Level ${this.levelId}: tiles not implemented yet: ${[...this.level.unknown].join(' ')}`);
 
+    this.signs = [];
+    this.hint = { text: '', alpha: 0 }; // sign text shown at the top of the screen
     // Platforms first: they must move before anything that rides them.
     this.arena = null;
     this.boss = null;
@@ -66,7 +71,7 @@ export class PlayScene extends Scene {
       if (obj.type === 'wind') this.winds.push(this.add(new WindZone(obj)));
       else if (obj.type === 'thornwater') this.thornwaters.push(this.add(new Thornwater(obj, this.level.h)));
       else if (obj.type === 'platform') this.level.platforms.push(this.add(new MovingPlatform(obj)));
-      else if (obj.type === 'sign') this.add(new Sign(obj.x * T, obj.y * T, obj.text));
+      else if (obj.type === 'sign') this.signs.push(this.add(new Sign(obj.x * T, obj.y * T, obj.text)));
       else if (obj.type === 'banner') this.add(new Banner(obj.x * T, obj.y * T));
       else if (obj.type === 'arena') {
         this.arena = new Rect(obj.x * T, obj.y * T, obj.w * T, obj.h * T);
@@ -188,6 +193,10 @@ export class PlayScene extends Scene {
       this.run.tick(dt);
     }
     if (this.captionTime > 0) this.captionTime -= dt;
+    // Sign hints fade in while Hop stands by a sign and fade out after he leaves.
+    const sign = this.signs.find((s) => s.near());
+    if (sign) this.hint.text = sign.text;
+    this.hint.alpha = Math.max(0, Math.min(1, this.hint.alpha + (sign ? dt : -dt) * HINT_FADE));
     if (this.state === 'play' && (input.justPressed(PAUSE) || this.pauseOnReturn)) {
       this.pauseOnReturn = false;
       sfx('pause');
@@ -608,6 +617,17 @@ export class PlayScene extends Scene {
     for (let i = 0; i < 3; i++) hud.gems[i] = this.gems[i] || this.record.gems[i];
     drawHud(r, hud);
     if (this.fight === 'on' || this.fight === 'won') this.drawBossBar(r);
+    else if (this.hint.alpha > 0) this.drawHint(r);
+  }
+
+  /** The nearby sign's text, in a panel at the top centre, clear of the action (§9.2). */
+  drawHint(r) {
+    const w = textWidth(this.hint.text) + 16;
+    const y = 24 - Math.round((1 - this.hint.alpha) * 6);
+    r.alpha = this.hint.alpha;
+    panel(r, Math.floor(VIEW_W / 2 - w / 2), y, w, 15, { edge: '#ffd23f' });
+    label(r, this.hint.text, VIEW_W / 2, y + 4);
+    r.alpha = 1;
   }
 
   /** Six segments, top centre (§9.2). */

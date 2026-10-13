@@ -1,6 +1,5 @@
 import { Entity } from '../../vendor/h3-engine.min.js';
 import { T } from '../config.js';
-import { label } from '../ui/label.js';
 
 /** Fixed launch at SPRING_SPEED; holding jump doesn't change the height (§4.2). */
 export class Spring extends Entity {
@@ -118,10 +117,20 @@ export class Sign extends Entity {
     r.rect(x + 2, y + 2, 8, 1, '#7a5530'); // writing
     r.rect(x + 2, y + 4, 6, 1, '#7a5530');
     r.rect(x + 9, y + 5, 2, 1, '#a8774a'); // grain
-    const p = this.scene.player;
-    if (p && Math.abs(p.cx - this.cx) < 2 * T && Math.abs(p.cy - this.cy) < 2 * T) {
-      label(r, this.text, Math.round(this.cx), y - 14);
+    // While Hop is near, a bobbing speech bubble ties the sign to its hint at the top of the screen.
+    if (this.near()) {
+      const bob = Math.round(Math.sin(performance.now() / 160));
+      r.rect(x + 3, y - 10 + bob, 7, 6, '#1d1d2b');
+      r.rect(x + 4, y - 9 + bob, 5, 4, '#ffffff');
+      r.rect(x + 5, y - 4 + bob, 1, 1, '#1d1d2b');
+      for (const dx of [5, 7]) r.rect(x + dx, y - 8 + bob, 1, 2, '#1d1d2b');
     }
+  }
+
+  /** Is Hop close enough to read it? PlayScene shows the text at the top of the screen. */
+  near() {
+    const p = this.scene.player;
+    return Boolean(p) && Math.abs(p.cx - this.cx) < 2 * T && Math.abs(p.cy - this.cy) < 2 * T;
   }
 }
 
