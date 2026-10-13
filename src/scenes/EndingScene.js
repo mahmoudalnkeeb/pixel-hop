@@ -78,7 +78,7 @@ export class EndingScene extends Scene {
   }
 
   renderStats(r) {
-    const cx = VIEW_W / 2;
+    const cx = Math.floor(VIEW_W / 2); // whole pixel, so panel edges stay sharp on odd view widths
     this.meadow(r, 0.4);
     r.rect(cx - 110, 20, 220, 130, 'rgba(20,20,45,0.85)');
     label(r, 'THE SUN SEED IS HOME!', cx, 28, { size: 16, color: '#ffd23f' });
