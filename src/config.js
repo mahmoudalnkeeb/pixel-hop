@@ -1,8 +1,18 @@
 // Every tunable number lives here (GDD §3.2). Tune the game only through this file.
 
 export const T = 16; // tile size, px
-export const VIEW_W = 320;
-export const VIEW_H = 180;
+// The view is at least 320×180 and grows to match the screen's shape, so there are no black bars
+// (src/view.js). VIEW_W/VIEW_H are live bindings: read them when drawing, not at module load.
+export const MIN_VIEW_W = 320;
+export const MIN_VIEW_H = 180;
+export const MAX_VIEW_W = 480; // about 21:9
+export const MAX_VIEW_H = 192; // the shortest level (10) is 12 rows
+export let VIEW_W = MIN_VIEW_W;
+export let VIEW_H = MIN_VIEW_H;
+export const setViewSize = (w, h) => {
+  VIEW_W = w;
+  VIEW_H = h;
+};
 
 // Movement (§3.2)
 export const GRAVITY = 900; // rising, and for everything that isn't Hop

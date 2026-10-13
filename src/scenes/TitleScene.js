@@ -7,6 +7,7 @@ import { Menu } from '../ui/Menu.js';
 /** Logo and menu. Browsers keep audio silent until the first key press (Appendix B). */
 export class TitleScene extends Scene {
   enter() {
+    this.taps = true; // touch: tap a menu item to choose it
     this.ctx.renderer.background = WORLDS[1].sky;
     this.t = 0;
     this.menu = new Menu([
@@ -19,7 +20,7 @@ export class TitleScene extends Scene {
 
   update(dt, ctx) {
     this.t += dt;
-    const choice = this.menu.update(ctx);
+    const choice = this.menu.update(ctx, this.game.touch?.takeTap());
     if (choice === 'play') this.game.scenes.switch('select');
     else if (choice === 'options') this.game.scenes.push('options');
   }
@@ -42,6 +43,7 @@ export class TitleScene extends Scene {
     r.sprite(characters().frame(FRAMES.slime), cx + 60, VIEW_H - 40, { flipX: true });
     label(r, 'PIXEL HOP', cx, 26, { size: 24, color: '#ffd23f', wave: this.t });
     this.menu.render(r, cx, 74);
-    label(r, 'Arrows/WASD move   Space jump   Esc pause', cx, VIEW_H - 22);
+    const hint = this.game.touch?.visible ? 'Left side: move   Right side: jump' : 'Arrows/WASD move   Space jump   Esc pause';
+    label(r, hint, cx, VIEW_H - 22);
   }
 }

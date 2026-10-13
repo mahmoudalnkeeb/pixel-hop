@@ -63,8 +63,13 @@ export class ControlsScene extends ListScene {
       super.update(dt, ctx);
       return;
     }
-    // Touch buttons feed fake codes into the same set; only a real key can be bound.
-    const code = [...ctx.input.pressedCodes].find((c) => !c.startsWith('Touch'));
+    // Touch buttons feed fake codes into the same set; only a real key can be bound, and any touch cancels.
+    const codes = [...ctx.input.pressedCodes];
+    if (this.game.touch?.takeTap() || codes.some((c) => c.startsWith('Touch'))) {
+      this.waiting = null;
+      return;
+    }
+    const code = codes.find((c) => !c.startsWith('Touch'));
     if (!code) return;
     const action = this.waiting;
     this.waiting = null;

@@ -1,7 +1,7 @@
 import { Game } from '../vendor/h3-engine.min.js';
 import { Jukebox } from './audio/Jukebox.js';
 import { Mixer } from './audio/Mixer.js';
-import { BUILT_LEVELS, EXTRA_LEVELS, VIEW_H, VIEW_W, WORLDS } from './config.js';
+import { BUILT_LEVELS, EXTRA_LEVELS, WORLDS } from './config.js';
 import { loadSave } from './save.js';
 import { AssistScene } from './scenes/AssistScene.js';
 import { BossIntroScene } from './scenes/BossIntroScene.js';
@@ -16,6 +16,7 @@ import { PlayScene } from './scenes/PlayScene.js';
 import { SelectScene } from './scenes/SelectScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 import { initSfx } from './sfx.js';
+import { followWindow, initialViewSize } from './view.js';
 import { exportTelemetry } from './telemetry.js';
 
 // Dev shortcuts: ?level=1 or ?level=sandbox skips the title; ?debug opens the overlay (toggle with `)
@@ -23,11 +24,12 @@ import { exportTelemetry } from './telemetry.js';
 const params = new URLSearchParams(location.search);
 const level = params.get('level');
 
+const view = initialViewSize();
 const game = new Game({
   canvas: '#game',
-  width: VIEW_W,
-  height: VIEW_H,
-  scale: 'pixel',
+  width: view.w,
+  height: view.h,
+  scale: 'fit', // src/view.js picks a view size that makes 'fit' fill the window
   background: WORLDS[1].sky,
   debug: params.has('debug'),
 });
@@ -46,8 +48,11 @@ const { options } = loadSave();
 for (const bus of ['music', 'sfx', 'ui']) game.mixer.setLevel(bus, options[bus]);
 applyKeys(options.keys);
 
-// On-screen touch buttons draw on top of every scene.
+followWindow(game);
+
+// On-screen touch controls draw on top of every scene; menus read taps from `game.touch`.
 const touch = new TouchControls(game);
+game.touch = touch;
 game.overlay = (r) => touch.render(r);
 
 game.scenes

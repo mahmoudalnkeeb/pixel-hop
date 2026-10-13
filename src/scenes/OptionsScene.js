@@ -43,7 +43,7 @@ export class AssistOptionsScene extends ListScene {
   }
 
   footer() {
-    return 'No medals are lost. Esc back';
+    return this.game.touch?.visible ? 'No medals are lost.' : 'No medals are lost. Esc back';
   }
 
   rows() {

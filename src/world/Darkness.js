@@ -1,4 +1,4 @@
-import { CRYSTAL_RADIUS, LIGHT_RADIUS, VIEW_H, VIEW_W } from '../config.js';
+import { CRYSTAL_RADIUS, LIGHT_RADIUS, MAX_VIEW_H, MAX_VIEW_W, VIEW_H, VIEW_W } from '../config.js';
 
 /** Soft-edged hole sprite: opaque centre fading to transparent, used to erase light pools from the dark. */
 const hole = (radius) => {
@@ -23,8 +23,9 @@ export class Darkness {
   constructor(alpha) {
     this.alpha = alpha;
     this.canvas = document.createElement('canvas');
-    this.canvas.width = VIEW_W;
-    this.canvas.height = VIEW_H;
+    // Sized for the largest view; only the current view's area is filled.
+    this.canvas.width = MAX_VIEW_W;
+    this.canvas.height = MAX_VIEW_H;
     this.ctx = this.canvas.getContext('2d');
     this.player = hole(LIGHT_RADIUS);
     this.crystal = hole(CRYSTAL_RADIUS);
@@ -36,7 +37,7 @@ export class Darkness {
     const ctx = this.ctx;
     const cam = scene.camera;
     ctx.globalCompositeOperation = 'source-over';
-    ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+    ctx.clearRect(0, 0, MAX_VIEW_W, MAX_VIEW_H);
     ctx.fillStyle = `rgba(5,5,15,${this.alpha})`;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     ctx.globalCompositeOperation = 'destination-out';

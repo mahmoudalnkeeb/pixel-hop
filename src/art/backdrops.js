@@ -1,12 +1,12 @@
-import { VIEW_H, VIEW_W } from '../config.js';
+import { MAX_VIEW_H, MAX_VIEW_W } from '../config.js';
 import { canvas, ellipse, hash2, px } from './paint.js';
 
 // Parallax backdrops for each world (§7): a screen-locked sky plus layers painted once into
 // wrap-around canvases. Painted lazily on first draw so headless tests never touch the DOM.
 
 export const LAYER_W = 384; // wider than the view so the repeat is harder to spot
-export const PAD = 140; // rows painted above the 180 px window, revealed as the camera climbs
-const H = VIEW_H + PAD;
+export const PAD = 140; // rows painted above the view's window, revealed as the camera climbs
+const H = MAX_VIEW_H + PAD; // tall enough for the tallest view
 
 const rgb = (c) => {
   const n = parseInt(c.slice(1), 16);
@@ -159,7 +159,7 @@ const crystal = (ctx, x, base, h, color, light) => {
 };
 
 const layer = (paint, f, extra = {}) => ({ canvas: canvas(LAYER_W, H, paint), f, ...extra });
-const sky = (paint) => canvas(VIEW_W, VIEW_H, paint);
+const sky = (paint) => canvas(MAX_VIEW_W, MAX_VIEW_H, paint); // screen-locked; painted for the largest view
 
 // World painters. Each returns { sky, layers (far to near), ambience, lightning? }.
 const WORLD_ART = {
@@ -168,7 +168,7 @@ const WORLD_ART = {
     const horizon = '#d4f1ff';
     return {
       sky: sky((ctx) => {
-        gradient(ctx, VIEW_W, VIEW_H, ['#3d9be9', '#6ec6ff', '#a8defa', horizon]);
+        gradient(ctx, MAX_VIEW_W, MAX_VIEW_H, ['#3d9be9', '#6ec6ff', '#a8defa', horizon]);
         glow(ctx, 256, 34, 40, '#fff6c8', 0.1);
         ellipse(ctx, 256, 34, 11, 11, '#fff8d6');
       }),
@@ -197,7 +197,7 @@ const WORLD_ART = {
 
   // Bramble Woods: misty forest, light shafts through the canopy, fireflies.
   2: () => ({
-    sky: sky((ctx) => gradient(ctx, VIEW_W, VIEW_H, ['#10251f', '#1f3d33', '#3d6650', '#5f8a68'])),
+    sky: sky((ctx) => gradient(ctx, MAX_VIEW_W, MAX_VIEW_H, ['#10251f', '#1f3d33', '#3d6650', '#5f8a68'])),
     layers: [
       layer((ctx) => {
         for (const x of spots(4, 5)) wrap(x, (xx) => shaft(ctx, xx, 14 + hash2(x, 2) * 14, 60, '#e8f5c0', 0.08));
@@ -220,7 +220,7 @@ const WORLD_ART = {
 
   // Crystal Caves: stalactites and glowing crystals in the dark.
   3: () => ({
-    sky: sky((ctx) => gradient(ctx, VIEW_W, VIEW_H, ['#07070f', '#110f22', '#1c1838', '#141228'])),
+    sky: sky((ctx) => gradient(ctx, MAX_VIEW_W, MAX_VIEW_H, ['#07070f', '#110f22', '#1c1838', '#141228'])),
     layers: [
       layer((ctx) => {
         ceiling(ctx, { y: 22, parts: [[5, 10], [11, 8], [23, 4]], seed: 3, color: '#1b1a33', sharp: true });
@@ -248,7 +248,7 @@ const WORLD_ART = {
     const horizon = '#ffe7c2';
     return {
       sky: sky((ctx) => {
-        gradient(ctx, VIEW_W, VIEW_H, ['#ff9f8a', '#ffbf9a', '#ffd9a8', horizon]);
+        gradient(ctx, MAX_VIEW_W, MAX_VIEW_H, ['#ff9f8a', '#ffbf9a', '#ffd9a8', horizon]);
         glow(ctx, 80, 72, 46, '#fff1c0', 0.12);
         ellipse(ctx, 80, 72, 18, 18, '#fff4cf');
         for (const y of [70, 76, 82]) px(ctx, 62, y, 36, 1, '#ffd9a8');
@@ -290,8 +290,8 @@ const WORLD_ART = {
   // Storm Keep: night storm, King Gloop's castle on the horizon, rain and lightning.
   5: () => ({
     sky: sky((ctx) => {
-      gradient(ctx, VIEW_W, VIEW_H, ['#0c0816', '#1a1230', '#2e2148', '#3e2c58']);
-      for (let i = 0; i < 40; i++) px(ctx, Math.floor(hash2(i, 1) * VIEW_W), Math.floor(hash2(1, i) * 80), 1, 1, hash2(i, 2) > 0.8 ? '#ffffff' : '#8a7fb0');
+      gradient(ctx, MAX_VIEW_W, MAX_VIEW_H, ['#0c0816', '#1a1230', '#2e2148', '#3e2c58']);
+      for (let i = 0; i < 40; i++) px(ctx, Math.floor(hash2(i, 1) * MAX_VIEW_W), Math.floor(hash2(1, i) * 80), 1, 1, hash2(i, 2) > 0.8 ? '#ffffff' : '#8a7fb0');
     }),
     layers: [
       layer((ctx) => {
@@ -326,7 +326,7 @@ const WORLD_ART = {
 
   // Throne of Gloop (level 10): inside the keep. Arched windows onto the storm, torch-lit pillars.
   throne: () => ({
-    sky: sky((ctx) => gradient(ctx, VIEW_W, VIEW_H, ['#120d1c', '#1a1428', '#221a33'])),
+    sky: sky((ctx) => gradient(ctx, MAX_VIEW_W, MAX_VIEW_H, ['#120d1c', '#1a1428', '#221a33'])),
     layers: [
       layer((ctx) => {
         px(ctx, 0, 0, LAYER_W, H, '#2a2238');

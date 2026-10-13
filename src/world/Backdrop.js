@@ -1,11 +1,9 @@
 import { Entity } from '../../vendor/h3-engine.min.js';
 import { backdrop, LAYER_W, PAD } from '../art/backdrops.js';
-import { VIEW_H, VIEW_W } from '../config.js';
+import { MAX_VIEW_H, MAX_VIEW_W, VIEW_H, VIEW_W } from '../config.js';
 import { hash2 } from '../art/paint.js';
 
 const VERTICAL = 0.5; // layers move vertically at half their horizontal parallax
-const BOX_W = VIEW_W + 32; // ambient particles wrap inside a box a little larger than the view
-const BOX_H = VIEW_H + 32;
 const AMBIENCE_COUNT = { pollen: 14, firefly: 18, mote: 24, petal: 16, rain: 70, ember: 16 };
 const FLASH_TIME = 0.35;
 
@@ -45,8 +43,8 @@ export class Backdrop extends Entity {
 
   _spawn(kind) {
     return Array.from({ length: AMBIENCE_COUNT[kind] ?? 0 }, (_, i) => ({
-      x: hash2(i, 1) * BOX_W,
-      y: hash2(1, i) * BOX_H,
+      x: hash2(i, 1) * MAX_VIEW_W,
+      y: hash2(1, i) * MAX_VIEW_H,
       f: 0.6 + hash2(i, 2) * 0.35, // depth: how much it follows the camera
       phase: hash2(i, 3) * 6.283,
       speed: 0.6 + hash2(i, 4) * 0.8,
@@ -96,9 +94,12 @@ export class Backdrop extends Entity {
   }
 
   _drawParticles(r, kind, ox, oy, view) {
+    // Particles wrap inside a box a little larger than the view.
+    const boxW = VIEW_W + 32;
+    const boxH = VIEW_H + 32;
     for (const p of this.particles) {
-      const x = ox + Math.round(mod(p.x - view.x * p.f, BOX_W)) - 16;
-      const y = oy + Math.round(mod(p.y - view.y * p.f, BOX_H)) - 16;
+      const x = ox + Math.round(mod(p.x - view.x * p.f, boxW)) - 16;
+      const y = oy + Math.round(mod(p.y - view.y * p.f, boxH)) - 16;
       if (kind === 'pollen') {
         r.rect(x, y, 1, 1, 'rgba(255,252,220,0.8)');
       } else if (kind === 'firefly') {

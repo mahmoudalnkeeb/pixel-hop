@@ -7,11 +7,13 @@ import { formatTime } from '../ui/hud.js';
 import { label } from '../ui/label.js';
 
 const WORLD_OF = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5];
-const node = (i) => ({ x: 26 + i * 29.8, y: 78 + (i % 2 === 0 ? 0 : -16) + (i >= 8 ? -8 : 0) });
+// Laid out for 320 px and centred in wider views.
+const node = (i) => ({ x: (VIEW_W - 320) / 2 + 26 + i * 29.8, y: 78 + (i % 2 === 0 ? 0 : -16) + (i >= 8 ? -8 : 0) });
 
 /** World map with 10 nodes, medals per level, and locked levels greyed out (§9.1). Takes `{ level }` to start the cursor there. */
 export class SelectScene extends Scene {
   enter({ level } = {}) {
+    this.taps = true; // touch: tap a level to select it, tap it again to play
     this.ctx.renderer.background = '#1c2a3a';
     this.save = loadSave();
     const reachable = Math.min(this.save.unlocked, LEVELS.length) - 1;
@@ -29,6 +31,14 @@ export class SelectScene extends Scene {
 
   update(dt, { input }) {
     this.t += dt;
+    const tap = this.game.touch?.takeTap();
+    const tapped = tap ? LEVELS.findIndex((_, i) => Math.abs(node(i).x - tap.x) < 14 && Math.abs(node(i).y - tap.y) < 16) : -1;
+    // Tapping the selected level again, or the info panel below the map, plays it.
+    const tapAgain = (tapped >= 0 && tapped === this.index) || (tap?.y ?? 0) > 124;
+    if (tapped >= 0 && !tapAgain) {
+      this.index = tapped;
+      sfx('ui_move');
+    }
     const d = (input.justPressed(RIGHT) ? 1 : 0) - (input.justPressed(LEFT) ? 1 : 0);
     if (d) {
       const next = this.index + d;
@@ -37,7 +47,7 @@ export class SelectScene extends Scene {
         sfx('ui_move');
       }
     }
-    if (input.justPressed(CONFIRM)) {
+    if (input.justPressed(CONFIRM) || tapAgain) {
       if (this.status(this.index) === 'open') {
         sfx('ui_confirm');
         this.game.scenes.switch('play', { level: LEVELS[this.index] });
@@ -117,6 +127,6 @@ export class SelectScene extends Scene {
     if (i < 9) medals.push(`Par ${rec.parTime ? '*' : '-'}`);
     label(r, medals.join('   '), VIEW_W / 2, y + 14);
     const best = rec.bestTime === null ? '--:--' : formatTime(rec.bestTime);
-    label(r, `Best ${best}    Enter: play   Esc: title`, VIEW_W / 2, y + 28, { color: '#aab' });
+    label(r, `Best ${best}    ${this.game.touch?.visible ? 'Tap again: play' : 'Enter: play   Esc: title'}`, VIEW_W / 2, y + 28, { color: '#aab' });
   }
 }

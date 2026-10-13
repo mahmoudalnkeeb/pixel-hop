@@ -8,6 +8,7 @@ import { Menu } from '../ui/Menu.js';
 /** Pushed over the play scene. Pops with the chosen action, handled by `PlayScene.resume` (§9.1). */
 export class PauseScene extends Scene {
   enter() {
+    this.taps = true; // touch: tap a menu item to choose it
     this.menu = new Menu([
       { text: 'Resume', value: 'resume' },
       { text: 'Restart from checkpoint', value: 'checkpoint' },
@@ -25,7 +26,7 @@ export class PauseScene extends Scene {
       this.game.scenes.pop('resume');
       return;
     }
-    const choice = this.menu.update(ctx);
+    const choice = this.menu.update(ctx, this.game.touch?.takeTap());
     if (choice === 'options') this.game.scenes.push('options');
     else if (choice) this.game.scenes.pop(choice);
   }
