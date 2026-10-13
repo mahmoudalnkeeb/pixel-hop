@@ -2,7 +2,7 @@ import { Collision, lerp, Pool, Rect, Scene } from '../../vendor/h3-engine.min.j
 import { SONGS } from '../audio/songs.js';
 import {
   BOSS_ARENA_SILENCE, BOSS_ASSIST_OFFER_DEATHS, BOSS_HP, BOSS_SLOWMO, BUILT_LEVELS, CAMERA_LERP, CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP, CAMERA_OFFSET_Y,
-  CHAIN_SCORES, HURT_INSET, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
+  CHAIN_SCORES, CULL_MARGIN, HURT_INSET, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
   SCORE_TIME_BONUS, SHAKE_SCALE, SHAKE_STOMP, SPRING_SPEED, STOMP_BOUNCE, STOMP_BOUNCE_HELD, STOMP_REACH, T,
   THORNWATER_CAMERA_BIAS, VIEW_H, VIEW_W,
   WALL_JUMP_FROM_LEVEL, WORLDS,
@@ -204,6 +204,8 @@ export class PlayScene extends Scene {
     this.camera.offsetY = lerp(this.camera.offsetY, rising ? THORNWATER_CAMERA_BIAS : CAMERA_OFFSET_Y, 0.05);
 
     if (this.arena && this.fight === 'none' && this.player.pos.x > this.arena.x + 2 * T) this.enterArena();
+
+    this.cullOffscreen();
 
     if (this.player.state !== 'play') return;
     Collision.check(this, 'player', 'enemy', this._onEnemy);
@@ -550,6 +552,23 @@ export class PlayScene extends Scene {
     this.player.hearts = Math.min(this.player.hearts, assist.hearts);
     this.player.invincible = assist.invincible;
     this.assisted ||= assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
+  }
+
+  /**
+   * Skip drawing entities outside the view plus CULL_MARGIN (sprites overhang their hitboxes).
+   * Zero-size entities (backdrop, fake walls) and `noCull` ones draw where they like, so they always draw.
+   * Enemies also skip their updates off screen (Enemy#onCamera).
+   */
+  cullOffscreen() {
+    const v = this.camera.view;
+    const x0 = v.x - CULL_MARGIN;
+    const x1 = v.x + v.w + CULL_MARGIN;
+    const y0 = v.y - CULL_MARGIN;
+    const y1 = v.y + v.h + CULL_MARGIN;
+    for (const e of this.entities) {
+      if ((e.w === 0 && e.h === 0) || e.noCull) continue;
+      e.visible = e.pos.x + e.w > x0 && e.pos.x < x1 && e.pos.y + e.h > y0 && e.pos.y < y1;
+    }
   }
 
   dust(x, y, n) {

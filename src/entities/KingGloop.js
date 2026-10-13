@@ -416,7 +416,7 @@ export class FallingRock extends Entity {
     super({ x: x - 6, y: ceilingY, w: 12, h: 12, z: 6, tags: ['boss_fx'] });
     this.floorY = floorY;
     this.tell = ROCK_TELL;
-    this.visible = true;
+    this.noCull = true; // its shadow tell is drawn on the floor, far below its bounds
   }
 
   update(dt) {

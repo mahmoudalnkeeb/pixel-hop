@@ -1,3 +1,4 @@
+import { drawText } from '../ui/font.js';
 import { TOUCH } from './controls.js';
 
 // Semi-transparent on-screen buttons (§9.4), in logical pixels. Shown automatically on the first touch.
@@ -64,7 +65,7 @@ export class TouchControls {
       else if (b.glyph === 'pause') {
         r.rect(cx - 4, cy - 4, 3, 8, ink);
         r.rect(cx + 1, cy - 4, 3, 8, ink);
-      } else r.text(b.glyph, cx, cy, { font: 'bold 16px monospace', color: ink, align: 'center', baseline: 'middle' });
+      } else drawText(r, b.glyph, cx, cy - 7, { color: '#ffffff', align: 'center', scale: 2 });
     }
   }
 }

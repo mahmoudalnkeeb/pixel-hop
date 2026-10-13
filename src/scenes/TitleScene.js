@@ -40,7 +40,7 @@ export class TitleScene extends Scene {
       h: Math.round(16 * squash),
     });
     r.sprite(characters().frame(FRAMES.slime), cx + 60, VIEW_H - 40, { flipX: true });
-    label(r, 'PIXEL HOP', cx, 26, { size: 24, color: '#ffd23f' });
+    label(r, 'PIXEL HOP', cx, 26, { size: 24, color: '#ffd23f', wave: this.t });
     this.menu.render(r, cx, 74);
     label(r, 'Arrows/WASD move   Space jump   Esc pause', cx, VIEW_H - 22);
   }
