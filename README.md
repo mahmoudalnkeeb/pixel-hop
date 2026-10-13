@@ -2,7 +2,7 @@
 
 **Play it:** https://mahmoudalnkeeb.github.io/pixel-hop/
 
-2D precision platformer on [h3-engine](https://github.com/mahmoudalnkeeb/h3-engine) v0.2.0 (vendored in `vendor/`). Design: `design/pixel-hop-gdd.md`.
+2D precision platformer on [h3-engine](https://github.com/mahmoudalnkeeb/h3-engine) v0.3.0 (vendored in `vendor/`). Design: `design/pixel-hop-gdd.md`.
 
 ## Run
 

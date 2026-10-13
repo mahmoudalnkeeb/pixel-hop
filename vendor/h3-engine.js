@@ -149,6 +149,7 @@ var Audio = class {
   constructor() {
     this._ctx = null;
     this._master = null;
+    this._buses = /* @__PURE__ */ new Map();
     this._volume = 1;
     this._muted = false;
     this.assets = null;
@@ -194,12 +195,31 @@ var Audio = class {
     this._applyVolume();
   }
   /**
+   * A named gain node feeding the master volume, created on first use. Use one
+   * per group (music, sfx, ui) to set or fade the group's volume.
+   * @param {string} name
+   * @returns {GainNode | null} Null if Web Audio is unavailable.
+   * @example
+   * audio.bus('music').gain.value = 0.5;
+   */
+  bus(name) {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    let gain = this._buses.get(name);
+    if (!gain) {
+      gain = ctx.createGain();
+      gain.connect(this._master);
+      this._buses.set(name, gain);
+    }
+    return gain;
+  }
+  /**
    * @param {string | AudioBuffer} sound Asset key or decoded buffer.
    * @param {PlayOptions} [options]
-   * @returns {AudioBufferSourceNode | null} Handle for {@link Audio#stop}, or null if audio is unavailable.
+   * @returns {SoundHandle | null} Handle for {@link Audio#stop}, or null if audio is unavailable.
    * @throws {Error} If `sound` is a key that hasn't been loaded.
    */
-  play(sound, { volume = 1, loop = false, rate = 1 } = {}) {
+  play(sound, { volume = 1, loop = false, rate = 1, loopStart, loopEnd, bus } = {}) {
     const ctx = this.ctx;
     if (!ctx) return null;
     const buffer = typeof sound === "string" ? this.assets?.sound(sound) : sound;
@@ -207,18 +227,21 @@ var Audio = class {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = loop;
+    if (loopStart !== void 0) source.loopStart = loopStart;
+    if (loopEnd !== void 0) source.loopEnd = loopEnd;
     source.playbackRate.value = rate;
-    source.connect(this._gainNode(volume)).connect(this._master);
+    const gain = this._gainNode(volume);
+    source.connect(gain).connect(this._output(bus));
     source.start();
-    return source;
+    return { source, gain };
   }
   /**
    * Stop a sound started with {@link Audio#play}. Ignores null and already-stopped handles.
-   * @param {AudioBufferSourceNode | null} handle
+   * @param {SoundHandle | null} handle
    */
   stop(handle) {
     try {
-      handle?.stop();
+      handle?.source.stop();
     } catch {
       return;
     }
@@ -229,7 +252,7 @@ var Audio = class {
    * @example
    * audio.tone({ freq: 300, to: 600, duration: 0.1 }); // rising jump blip
    */
-  tone({ freq = 440, to, duration = 0.1, type = "square", volume = 0.2 } = {}) {
+  tone({ freq = 440, to, duration = 0.1, type = "square", volume = 0.2, bus } = {}) {
     const ctx = this.ctx;
     if (ctx?.state !== "running") return;
     const now = ctx.currentTime;
@@ -241,7 +264,7 @@ var Audio = class {
     const gain = this._gainNode(volume);
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(SILENT, end);
-    oscillator.connect(gain).connect(this._master);
+    oscillator.connect(gain).connect(this._output(bus));
     oscillator.start(now);
     oscillator.stop(end);
   }
@@ -252,6 +275,9 @@ var Audio = class {
     this._master = this._ctx.createGain();
     this._master.connect(this._ctx.destination);
     this._applyVolume();
+  }
+  _output(busName) {
+    return busName === void 0 ? this._master : this.bus(busName);
   }
   _gainNode(volume) {
     const gain = this._ctx.createGain();
@@ -362,6 +388,15 @@ var Input = class {
    */
   justReleased(keys) {
     return hasAny(this._released, keys);
+  }
+  /**
+   * `KeyboardEvent.code`s pressed this step. Read it each step instead of keeping it: the set is reused.
+   * @type {ReadonlySet<string>}
+   * @example
+   * const [code] = input.pressedCodes; // the key to bind, if any
+   */
+  get pressedCodes() {
+    return this._pressed;
   }
   /** @returns {boolean} True if any key was pressed this step. */
   anyPressed() {
@@ -964,7 +999,8 @@ var Debug = class {
     if (this.game.input.justPressed(this.toggleKey)) this.enabled = !this.enabled;
   }
   /**
-   * Draw the overlay on top of everything. Called by the game each frame.
+   * Draw the overlay on top of everything. Called by the game each frame. The stats
+   * panel is sized in CSS pixels, so it keeps the same size at any logical resolution.
    * @param {import('../render/Renderer.js').Renderer} r
    */
   render(r) {
@@ -995,12 +1031,16 @@ var Debug = class {
       `scene ${scene ? scene.key : "-"}`
     );
     for (const [label, read] of this._watches) lines.push(`${label} ${read()}`);
+    const panelScale = 1 / r.pixelScale;
+    r.push();
+    if (panelScale !== 1) r.scale(panelScale, panelScale);
     let longest = 0;
     for (const line of lines) if (line.length > longest) longest = line.length;
     r.rect(4, 4, longest * CHAR_WIDTH + 8, lines.length * LINE_HEIGHT + 4, PANEL_COLOR);
     for (let i = 0; i < lines.length; i++) {
       r.text(lines[i], 8, 8 + i * LINE_HEIGHT, TEXT_STYLE);
     }
+    r.pop();
   }
 };
 
@@ -1180,7 +1220,7 @@ var SceneManager = class {
       this._syncContext();
       scene.enter(data);
     };
-    const preloading = scene.preload(this.game.assets);
+    const preloading = scene.preload(this.game.assets, data);
     if (!isPromise(preloading)) {
       enter();
       return Promise.resolve();
@@ -1198,6 +1238,10 @@ var SceneManager = class {
         throw error;
       }
     );
+  }
+  _firstDrawnIndex() {
+    for (let i = this.stack.length - 1; i > 0; i--) if (this.stack[i].opaque) return i;
+    return 0;
   }
   _syncContext() {
     const ctx = this.game.ctx;
@@ -1234,6 +1278,7 @@ var Game = class {
     this.height = height;
     this.paused = false;
     this._stepping = false;
+    this.overlay = null;
     this.events = new Events();
     this.renderer = new RendererClass({ canvas, width, height, scale, background });
     this.audio = new Audio();
@@ -1308,8 +1353,13 @@ var Game = class {
     this.events.emit("stop");
   }
   _pauseWhileHidden() {
-    if (document.hidden) this.loop.pause();
-    else if (!this.paused) this.loop.resume();
+    if (document.hidden) {
+      this.loop.pause();
+      this.events.emit("hidden");
+      return;
+    }
+    if (!this.paused) this.loop.resume();
+    this.events.emit("visible");
   }
   _update(dt) {
     const scene = this.scenes.current;
@@ -1330,9 +1380,14 @@ var Game = class {
     const r = this.renderer;
     r.beginFrame();
     if (this.scenes.loading) this._renderLoading(r);
-    else for (const scene of this.scenes.stack) scene._draw(r, alpha);
+    else this._renderScenes(r, alpha);
+    this.overlay?.(r, alpha);
     this.debug.render(r);
     r.endFrame();
+  }
+  _renderScenes(r, alpha) {
+    const stack = this.scenes.stack;
+    for (let i = this.scenes._firstDrawnIndex(); i < stack.length; i++) stack[i]._draw(r, alpha);
   }
   _renderLoading(r) {
     const barWidth = Math.round(this.width / 2);
@@ -1622,6 +1677,7 @@ var Camera = class {
     this.offsetY = 0;
     this.shakeX = 0;
     this.shakeY = 0;
+    this.shakeScale = 1;
     this._shakeTimeLeft = 0;
     this._shakeDuration = 0;
     this._shakeIntensity = 0;
@@ -1663,12 +1719,13 @@ var Camera = class {
   }
   /**
    * Random offset that fades out over `duration`. An overlapping shake keeps the stronger intensity.
-   * @param {number} [intensity=4] Maximum offset in pixels.
+   * @param {number} [intensity=4] Maximum offset in pixels, before {@link Camera#shakeScale}.
    * @param {number} [duration=0.3] Seconds.
    */
   shake(intensity = 4, duration = 0.3) {
+    const scaled = intensity * this.shakeScale;
     const alreadyShaking = this._shakeTimeLeft > 0;
-    this._shakeIntensity = alreadyShaking ? Math.max(intensity, this._shakeIntensity) : intensity;
+    this._shakeIntensity = alreadyShaking ? Math.max(scaled, this._shakeIntensity) : scaled;
     this._shakeDuration = duration;
     this._shakeTimeLeft = Math.max(this._shakeTimeLeft, duration);
   }
@@ -1775,6 +1832,8 @@ var Scene = class {
     this.key = "";
     this.entities = [];
     this.camera = new Camera(game ? game.width : 0, game ? game.height : 0);
+    this.timeScale = 1;
+    this.opaque = false;
     this.timer = new Timer();
     this._tweens = [];
     this._pendingAdds = [];
@@ -1785,9 +1844,10 @@ var Scene = class {
   /**
    * Load assets before {@link Scene#enter}. Returning a promise shows the loading screen until it settles.
    * @param {Assets} _assets
+   * @param {any} [_data] The same data `enter` will receive.
    * @returns {void | Promise<void>}
    */
-  preload(_assets) {
+  preload(_assets, _data) {
   }
   /**
    * Called once when the scene starts, with the data passed to `switch` or `push`.
@@ -1891,7 +1951,8 @@ var Scene = class {
     this._tweens.push(tween);
     return tween;
   }
-  _step(dt) {
+  _step(realDt) {
+    const dt = realDt * this.timeScale;
     this._updating = true;
     this._updateEntities(dt);
     this.timer.update(dt);

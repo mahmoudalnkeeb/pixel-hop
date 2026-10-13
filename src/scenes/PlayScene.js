@@ -2,7 +2,7 @@ import { Collision, lerp, Pool, Rect, Scene } from '../../vendor/h3-engine.min.j
 import { SONGS } from '../audio/songs.js';
 import {
   BOSS_ARENA_SILENCE, BOSS_ASSIST_OFFER_DEATHS, BOSS_HP, BOSS_SLOWMO, BUILT_LEVELS, CAMERA_LERP, CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP, CAMERA_OFFSET_Y,
-  CHAIN_SCORES, EXTRA_LEVELS, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
+  CHAIN_SCORES, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
   SCORE_TIME_BONUS, SHAKE_SCALE, SHAKE_STOMP, SPRING_SPEED, STOMP_BOUNCE, STOMP_BOUNCE_HELD, STOMP_REACH, T,
   THORNWATER_CAMERA_BIAS, VIEW_H, VIEW_W,
   WALL_JUMP_FROM_LEVEL, WORLDS,
@@ -40,10 +40,8 @@ const nextBuilt = (id) => {
 
 /** Takes `{ level }`: a level id from BUILT_LEVELS or EXTRA_LEVELS. */
 export class PlayScene extends Scene {
-  preload(assets) {
-    const json = {};
-    for (const id of [...BUILT_LEVELS, ...EXTRA_LEVELS]) json[`level-${id}`] = `levels/${id}.json`;
-    return assets.load({ json }); // keys already loaded are skipped
+  preload(assets, { level = LEVELS[0] } = {}) {
+    return assets.load({ json: { [`level-${level}`]: `levels/${level}.json` } }); // keys already loaded are skipped
   }
 
   enter({ level = LEVELS[0] } = {}) {
@@ -54,13 +52,6 @@ export class PlayScene extends Scene {
     this.record = levelRecord(this.save, this.levelId);
     const palette = WORLDS[this.def.world ?? 1];
     renderer.background = palette.sky;
-
-    // Screen shake follows the accessibility option (§9.5).
-    const shake = this.camera.shake.bind(this.camera);
-    this.camera.shake = (intensity, duration) => {
-      const scale = SHAKE_SCALE[this.save.options.shake] ?? 1;
-      if (scale > 0) shake(intensity * scale, duration);
-    };
 
     this.add(new Backdrop(palette));
     this.level = this.add(new Level(this.def));
@@ -125,10 +116,11 @@ export class PlayScene extends Scene {
     );
     this.add(new FakeWalls(this.level));
     if (this.def.darkness) this.darkness = new Darkness(this.def.darkness);
-    this.timeScale = assist.speed;
+    this.assistSpeed = assist.speed;
     this.reduceFlashing = this.save.options.flashing === 'reduced';
     this.player.reduceFlashing = this.reduceFlashing;
     this.slowMo = 0; // seconds of boss slow motion left
+    this.applySpeed(0);
     this.respawnPoint = { x: this.player.pos.x, y: this.player.pos.y };
     this.checkpointIndex = -1;
 
@@ -169,10 +161,7 @@ export class PlayScene extends Scene {
     game.jukebox.play(music, { fadeIn: 0.5 });
 
     // The engine pauses while the tab is hidden; open the pause menu when it comes back (§9.4).
-    this._onVisibility = () => {
-      if (document.hidden) this.pauseOnReturn = true;
-    };
-    document.addEventListener('visibilitychange', this._onVisibility);
+    this._offHidden = game.events.on('hidden', () => (this.pauseOnReturn = true));
 
     const p = this.player;
     game.debug.watch('vel', () => `${p.vel.x.toFixed(0)},${p.vel.y.toFixed(0)}`);
@@ -186,11 +175,14 @@ export class PlayScene extends Scene {
   exit() {
     // Leaving mid-level (restart, quit) still counts as a run for the playtest data.
     if (this.state === 'play') this.run.finish(false, this.assisted);
-    document.removeEventListener('visibilitychange', this._onVisibility);
+    this._offHidden();
     for (const w of WATCHES) this.ctx.game.debug.unwatch(w);
   }
 
   update(dt, { input }) {
+    this.applySpeed(dt);
+    // Options can change mid-level from the pause menu, so this is read every step (§9.5).
+    this.camera.shakeScale = SHAKE_SCALE[this.save.options.shake] ?? 1;
     if (this.state === 'play') {
       this.time += dt;
       this.run.tick(dt);
@@ -405,6 +397,7 @@ export class PlayScene extends Scene {
     this.fight = 'won';
     this.clearBossFx();
     this.slowMo = BOSS_SLOWMO;
+    this.applySpeed(0);
     this.game.jukebox.stop(0.5);
   }
 
@@ -533,7 +526,8 @@ export class PlayScene extends Scene {
   /** Assist Mode turned on mid-level (from the offer after repeated boss deaths). */
   applyAssist() {
     const assist = this.save.options.assist;
-    this.timeScale = assist.speed;
+    this.assistSpeed = assist.speed;
+    this.applySpeed(0);
     this.player.maxHearts = assist.hearts;
     this.player.hearts = assist.hearts;
     this.player.invincible = assist.invincible;
@@ -548,14 +542,10 @@ export class PlayScene extends Scene {
     for (let i = 0; i < n; i++) this.add(this.particles.get().spawn(x, y, color, this.particles, opts));
   }
 
-  /** Game speed: Assist Mode (§9.5) and boss slow motion (§6.3). Overrides the engine's private step; see docs. */
-  _step(dt) {
-    let scale = this.timeScale;
-    if (this.slowMo > 0) {
-      this.slowMo -= dt;
-      scale *= 0.3;
-    }
-    super._step(dt * scale);
+  /** Game speed: Assist Mode (§9.5) times boss slow motion (§6.3). `dt` is already scaled, so slow motion counts down in real time. */
+  applySpeed(dt) {
+    if (this.slowMo > 0) this.slowMo -= dt / this.timeScale;
+    this.timeScale = this.assistSpeed * (this.slowMo > 0 ? 0.3 : 1);
   }
 
   render(r) {

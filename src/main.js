@@ -46,14 +46,9 @@ const { options } = loadSave();
 for (const bus of ['music', 'sfx', 'ui']) game.mixer.setLevel(bus, options[bus]);
 applyKeys(options.keys);
 
-// On-screen touch buttons draw on top of every scene. The engine has no global overlay hook,
-// so they're drawn just before the renderer finishes the frame.
+// On-screen touch buttons draw on top of every scene.
 const touch = new TouchControls(game);
-const endFrame = game.renderer.endFrame.bind(game.renderer);
-game.renderer.endFrame = () => {
-  touch.render(game.renderer);
-  endFrame();
-};
+game.overlay = (r) => touch.render(r);
 
 game.scenes
   .add('title', TitleScene)
