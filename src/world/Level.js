@@ -1,5 +1,6 @@
 import { Collision, Entity, Rect } from '../../vendor/h3-engine.min.js';
-import { tiles, TILE } from '../art/tiles.js';
+import { decor, decorCounts } from '../art/decor.js';
+import { groundFrame, OPEN, tiles, TILE } from '../art/tiles.js';
 import { hash2 } from '../art/paint.js';
 import { T, WORLDS } from '../config.js';
 
@@ -13,6 +14,7 @@ const TILE_CHARS = '.#B-^%RU<>';
 // Solid tiles Hop can wall-slide on (§4.2: never crumble or switch blocks).
 const isWallTile = (t) => t === '#' || t === 'B';
 
+const POCKET_MAX = 24; // cells; a bigger enclosed space behind a fake wall is a room, not a pocket
 const UP = [[0, -1]];
 const SIDEWAYS = [[1, 0], [-1, 0]];
 
@@ -44,8 +46,10 @@ export class Level extends Entity {
         return ch;
       }),
     );
+    this.cracked = new Set(); // one fake tile per secret wall shows a hairline crack (§5.3)
     this.fakeRegions = this._labelFakeRegions();
     this.frames = this._tileFrames();
+    this.decor = this._decorFrames();
     this._tile = new Rect();
     this._hit = { wall: '', ground: false, ceiling: false, platform: null, groundSolid: null, ceilingSolid: null };
   }
@@ -61,6 +65,7 @@ export class Level extends Entity {
   setTile(c, r, ch) {
     this.grid[r][c] = ch;
     this.frames = this._tileFrames();
+    this.decor = this._decorFrames();
   }
 
   /** Is this tile character solid right now? */
@@ -267,6 +272,7 @@ export class Level extends Entity {
         if (this.grid[r][c] !== '%' || ids[r][c] >= 0) continue;
         const stack = [[c, r]];
         ids[r][c] = next;
+        this.cracked.add(r * this.cols + c);
         while (stack.length > 0) {
           const [x, y] = stack.pop();
           for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
@@ -280,7 +286,47 @@ export class Level extends Entity {
       }
     }
     this.fakeRegionCount = next;
+    this._addPockets(ids);
     return ids;
+  }
+
+  /**
+   * A secret pocket is a small enclosed patch of empty cells whose only way in is through a fake wall
+   * (e.g. the gem cell behind level 1's `%%%`). Pockets join their wall's region, so FakeWalls draws
+   * them as solid ground and fades them with the wall; otherwise the hole would give the secret away.
+   */
+  _addPockets(ids) {
+    this.pockets = new Set();
+    const seen = new Set();
+    const key = (c, r) => r * this.cols + c;
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        if (ids[r][c] < 0) continue;
+        for (const [sc, sr] of [[c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]]) {
+          if (sr < 0 || sr >= this.rows || this.at(sc, sr) !== '.' || seen.has(key(sc, sr))) continue;
+          // Flood the empty area; it's a pocket if it stays small and enclosed by blocks and fake walls.
+          const cells = [];
+          const stack = [[sc, sr]];
+          seen.add(key(sc, sr));
+          let enclosed = true;
+          while (stack.length > 0 && enclosed) {
+            const [x, y] = stack.pop();
+            cells.push([x, y]);
+            if (cells.length > POCKET_MAX || x <= 0 || y <= 0 || x >= this.cols - 1 || y >= this.rows - 1) enclosed = false;
+            for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+              if (this.at(nx, ny) !== '.' || seen.has(key(nx, ny))) continue;
+              seen.add(key(nx, ny));
+              stack.push([nx, ny]);
+            }
+          }
+          if (!enclosed) continue;
+          for (const [x, y] of cells) {
+            ids[y][x] = ids[r][c];
+            this.pockets.add(key(x, y));
+          }
+        }
+      }
+    }
   }
 
   /** Draw only the tiles inside the camera view. Fake walls are drawn by `FakeWalls`, above the player. */
@@ -293,28 +339,58 @@ export class Level extends Entity {
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
         const t = this.grid[row][col];
-        if (t !== '.' && t !== '%') this.drawTile(r, t, col, row);
+        if (t === '.') {
+          const d = this.decor[row][col];
+          if (d >= 0) r.sprite(decor(this.world).sheet.frame(d), col * T, row * T);
+        } else if (t !== '%') {
+          this.drawTile(r, t, col, row);
+        }
       }
     }
   }
 
   /** Sprite frame for each tile, chosen once at load (grass on exposed tops, variants by position). */
   _tileFrames() {
+    // A side is exposed unless a block sits there. Off the map counts as covered, so the level's
+    // outer border has no edges; switch blocks count as open because they come and go.
     const covered = (c, r) => {
+      if (r < 0 || r >= this.rows) return true;
       const t = this.at(c, r);
-      return t === '#' || t === 'B' || t === '%';
+      return t === '#' || t === 'B' || t === '%' || t === '<' || t === '>' || this.pockets.has(r * this.cols + c);
     };
+    const mask = (c, r) =>
+      (covered(c, r - 1) ? 0 : OPEN.top) |
+      (covered(c + 1, r) ? 0 : OPEN.right) |
+      (covered(c, r + 1) ? 0 : OPEN.bottom) |
+      (covered(c - 1, r) ? 0 : OPEN.left);
     return this.grid.map((line, r) =>
       line.map((t, c) => {
-        const alt = hash2(c, r) > 0.7;
-        if (t === '#') return covered(c, r - 1) ? (alt ? TILE.innerAlt : TILE.inner) : alt ? TILE.topAlt : TILE.top;
-        if (t === '%') return covered(c, r - 1) ? TILE.fakeInner : TILE.fakeTop;
+        // Fake walls use the same frames as the ground around them, so they really look like `#`.
+        if (t === '#' || t === '%' || this.pockets.has(r * this.cols + c)) return groundFrame(mask(c, r), hash2(c, r) > 0.6 ? 1 : 0);
         if (t === 'B') return TILE.brick;
         if (t === '-') return TILE.oneWay;
         if (t === '^') return TILE.spikes;
         if (t === '<') return TILE.cannonL;
         if (t === '>') return TILE.cannonR;
         if (t === 'R' || t === 'U') return TILE.redOn; // chosen per frame in drawTile
+        return -1;
+      }),
+    );
+  }
+
+  /**
+   * Decoration frame per empty cell (-1 = none): a standing piece on exposed ground below it, or a
+   * hanging piece under a ledge above it. Chosen by position hash, so it never changes between visits.
+   */
+  _decorFrames() {
+    const { top, hang } = decorCounts(this.world);
+    const ground = (c, r) => this.at(c, r) === '#' && r < this.rows;
+    return this.grid.map((line, r) =>
+      line.map((t, c) => {
+        if (t !== '.' || this.pockets.has(r * this.cols + c)) return -1;
+        const roll = hash2(c * 7 + 3, r * 13 + 5);
+        if (r + 1 < this.rows && ground(c, r + 1) && roll < 0.45) return Math.floor(hash2(c, r + 99) * top);
+        if (r > 0 && ground(c, r - 1) && roll < 0.3) return top + Math.floor(hash2(c + 99, r) * hang);
         return -1;
       }),
     );

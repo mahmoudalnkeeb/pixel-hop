@@ -1,6 +1,6 @@
 import { Entity } from '../../vendor/h3-engine.min.js';
 import { T } from '../config.js';
-import { tiles } from '../art/tiles.js';
+import { tiles, TILE } from '../art/tiles.js';
 
 const INSIDE_ALPHA = 0.4;
 
@@ -45,6 +45,7 @@ export class FakeWalls extends Entity {
         if (id < 0) continue;
         r.alpha = this.inside[id] ? INSIDE_ALPHA : 1;
         r.sprite(sheet.frame(level.frames[row][col]), col * T, row * T);
+        if (level.cracked.has(row * level.cols + col)) r.sprite(sheet.frame(TILE.crack), col * T, row * T);
       }
     }
     r.alpha = 1;
