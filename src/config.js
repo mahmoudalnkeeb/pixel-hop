@@ -5,14 +5,19 @@ export const VIEW_W = 320;
 export const VIEW_H = 180;
 
 // Movement (§3.2)
-export const GRAVITY = 900;
+export const GRAVITY = 900; // rising, and for everything that isn't Hop
+export const FALL_GRAVITY = 1250; // Hop falls faster than he rises, so jumps feel weighty, not floaty
+export const APEX_SPEED = 40; // px/s; below this vertical speed with jump held...
+export const APEX_GRAVITY = 0.5; // ...gravity is scaled by this: a short hang at the top of the arc
 export const MAX_FALL = 420;
 export const RUN_SPEED = 110;
-export const ACCEL_GROUND = 1000;
-export const ACCEL_AIR = 650;
-export const FRICTION = 1400;
+export const ACCEL_GROUND = 2000; // full speed in about 0.05 s
+export const ACCEL_AIR = 1200;
+export const FRICTION = 2600; // stops in about 0.04 s
 export const JUMP_SPEED = 320;
-export const JUMP_CUT = 2.5; // gravity multiplier while rising with jump released
+export const JUMP_CUT_SPEED = 80; // releasing jump caps upward speed to this (a hard cut)...
+export const JUMP_MIN_TIME = 0.07; // ...but only after rising this long, so a tap is still a short hop
+export const NUDGE = 4; // px; head bumps on a corner slide past it, and feet clipping a ledge pop up onto it
 export const COYOTE_TIME = 0.08;
 export const JUMP_BUFFER = 0.12;
 export const STOMP_BOUNCE = 220;
@@ -21,7 +26,7 @@ export const SPRING_SPEED = 480;
 export const WALL_SLIDE_MAX = 60;
 export const WALL_JUMP_VX = 140;
 export const WALL_JUMP_VY = 300;
-export const WALL_JUMP_LOCK = 0.12; // input toward the wall is ignored this long
+export const WALL_JUMP_LOCK = 0.12; // the kick away from the wall can't be steered this long
 export const WALL_COYOTE = 0.08;
 export const WALL_JUMP_FROM_LEVEL = 5;
 export const DROP_THROUGH_TIME = 0.2; // one-way platforms ignored this long after ↓ + Jump
@@ -39,6 +44,7 @@ export const LAND_SQUASH_SPEED = 150;
 
 // Enemies (§4.3)
 export const STOMP_REACH = 8; // px; feet must be less than this below the enemy's top
+export const HURT_INSET = 2; // px; Hop's hurtbox is this much smaller than his body on the sides and top
 export const SLIME_SPEED = 30;
 export const HOPPER_VX = 60;
 export const HOPPER_VY = 260;

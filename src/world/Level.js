@@ -13,6 +13,9 @@ const TILE_CHARS = '.#B-^%RU<>';
 // Solid tiles Hop can wall-slide on (§4.2: never crumble or switch blocks).
 const isWallTile = (t) => t === '#' || t === 'B';
 
+const UP = [[0, -1]];
+const SIDEWAYS = [[1, 0], [-1, 0]];
+
 /** ASCII tile map with per-axis collision, one-way platforms and moving-platform landings (GDD Appendix C.1). */
 export class Level extends Entity {
   /** @param {{ map: string[], world?: number }} def */
@@ -86,7 +89,7 @@ export class Level extends Entity {
 
   /**
    * Move X then Y, pushing out of tiles and landing on moving platforms.
-   * Honours `e.dropTimer > 0` by ignoring one-way surfaces.
+   * Honours `e.dropTimer > 0` by ignoring one-way surfaces, and `e.nudge` (px) for corner correction.
    * @returns {{ wall: string, ground: boolean, ceiling: boolean, platform: Entity | null }} Shared object.
    */
   moveAndCollide(e, dt) {
@@ -96,9 +99,13 @@ export class Level extends Entity {
     hit.platform = null;
     hit.groundSolid = hit.ceilingSolid = null;
     e.pos.x += e.vel.x * dt;
+    // Feet clipping a ledge corner pop up onto it instead of stopping dead against the wall.
+    if (e.nudge && this._blocked(e, e.pos.x, e.pos.y)) this._nudge(e, UP);
     this._collide(e, 'x', 0);
     const prevBottom = e.pos.y + e.h;
     e.pos.y += e.vel.y * dt;
+    // A head bump on the edge of a ceiling tile slides past it instead of killing the jump.
+    if (e.nudge && e.vel.y < 0 && this._blocked(e, e.pos.x, e.pos.y)) this._nudge(e, SIDEWAYS);
     this._collide(e, 'y', prevBottom);
     if (e.vel.y >= 0 && !(e.dropTimer > 0)) this._landOnPlatforms(e, prevBottom);
     return hit;
@@ -152,14 +159,43 @@ export class Level extends Entity {
     }
   }
 
+  /** Would the entity overlap a solid tile or solid entity at (x, y)? One-way surfaces don't count. */
+  _blocked(e, x, y) {
+    const c0 = Math.floor(x / T);
+    const c1 = Math.floor((x + e.w - 0.001) / T);
+    const r0 = Math.floor(y / T);
+    const r1 = Math.floor((y + e.h - 0.001) / T);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (this.isSolid(c, r)) return true;
+    for (let i = 0; i < this.solids.length; i++) {
+      const s = this.solids[i];
+      if (s.solid && s !== e && x < s.pos.x + s.w && x + e.w > s.pos.x && y < s.pos.y + s.h && y + e.h > s.pos.y) return true;
+    }
+    return false;
+  }
+
+  /** Shift the entity to the nearest free spot up to `e.nudge` px along one of `dirs`, if there is one. */
+  _nudge(e, dirs) {
+    for (let d = 1; d <= e.nudge; d++) {
+      for (const [dx, dy] of dirs) {
+        const x = e.pos.x + dx * d;
+        const y = e.pos.y + dy * d;
+        if (this._blocked(e, x, y)) continue;
+        e.pos.x = x;
+        e.pos.y = y;
+        return;
+      }
+    }
+  }
+
   /** Moving platforms are solid on top only, like one-way tiles. */
   _landOnPlatforms(e, prevBottom) {
     const bottom = e.pos.y + e.h;
     for (let i = 0; i < this.platforms.length; i++) {
       const p = this.platforms[i];
       if (e.pos.x + e.w <= p.pos.x || e.pos.x >= p.pos.x + p.w) continue;
-      // Compare with the platform's top before it moved this step.
-      if (prevBottom > p.pos.y - p.dy + 0.01 || bottom < p.pos.y) continue;
+      // Feet must have been at or above the platform's top, before or after it moved this step.
+      // (A rider on a descending platform was carried down to its new top, below the old one.)
+      if (prevBottom > Math.max(p.pos.y, p.pos.y - p.dy) + 0.01 || bottom < p.pos.y) continue;
       e.pos.y = p.pos.y - e.h;
       e.vel.y = 0;
       this._hit.ground = true;

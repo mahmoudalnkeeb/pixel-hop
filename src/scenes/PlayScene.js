@@ -2,7 +2,7 @@ import { Collision, lerp, Pool, Rect, Scene } from '../../vendor/h3-engine.min.j
 import { SONGS } from '../audio/songs.js';
 import {
   BOSS_ARENA_SILENCE, BOSS_ASSIST_OFFER_DEATHS, BOSS_HP, BOSS_SLOWMO, BUILT_LEVELS, CAMERA_LERP, CAMERA_LOOK_AHEAD, CAMERA_LOOK_LERP, CAMERA_OFFSET_Y,
-  CHAIN_SCORES, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
+  CHAIN_SCORES, HURT_INSET, JUMP, LEVELS, MAX_HEARTS, PAUSE, SCORE_CLEAR, SCORE_COIN, SCORE_GEM, SCORE_HEART_FULL,
   SCORE_TIME_BONUS, SHAKE_SCALE, SHAKE_STOMP, SPRING_SPEED, STOMP_BOUNCE, STOMP_BOUNCE_HELD, STOMP_REACH, T,
   THORNWATER_CAMERA_BIAS, VIEW_H, VIEW_W,
   WALL_JUMP_FROM_LEVEL, WORLDS,
@@ -214,16 +214,22 @@ export class PlayScene extends Scene {
     Collision.check(this, 'player', 'seed', this._onSeed);
   }
 
-  /** Stomp when falling onto the enemy's top; any other contact hurts (§4.3). */
+  /** Stomp when falling onto the enemy's top; other contact with Hop's (slightly smaller) hurtbox hurts (§4.3). */
   touchEnemy(p, enemy) {
     if (enemy.dead || p.state !== 'play') return;
     if (enemy.has('boss')) {
       enemy.touch(p);
       return;
     }
-    const stomp = enemy.has('stompable') && p.vel.y > 0 && p.pos.y + p.h - enemy.pos.y < STOMP_REACH;
-    if (!stomp) {
-      if (p.hurt(enemy.cx)) enemy.hitPlayer = true;
+    const onTop = enemy.has('stompable') && p.pos.y + p.h - enemy.pos.y < STOMP_REACH;
+    // Feet grazing the top on the way up (jumping over it, or a second enemy right after a stomp) is harmless.
+    if (onTop && p.vel.y <= 0) return;
+    if (!onTop) {
+      const hurtbox =
+        p.pos.x + HURT_INSET < enemy.pos.x + enemy.w &&
+        p.pos.x + p.w - HURT_INSET > enemy.pos.x &&
+        p.pos.y + HURT_INSET < enemy.pos.y + enemy.h;
+      if (hurtbox && p.hurt(enemy.cx)) enemy.hitPlayer = true;
       return;
     }
     const { input } = this.ctx;
@@ -503,6 +509,7 @@ export class PlayScene extends Scene {
     // Options may have changed while paused; nothing in the save is pending, so reload it.
     this.save = loadSave();
     this.record = levelRecord(this.save, this.levelId);
+    this.syncAssist();
     if (action === 'boss_intro') this.startFight();
     else if (action === 'assist') this.applyAssist();
     else if (action === 'checkpoint') this.respawn();
@@ -532,6 +539,17 @@ export class PlayScene extends Scene {
     this.player.hearts = assist.hearts;
     this.player.invincible = assist.invincible;
     this.assisted = assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
+  }
+
+  /** Apply Assist options changed from the pause menu, without refilling hearts (that would be a free heal). */
+  syncAssist() {
+    const assist = this.save.options.assist;
+    this.assistSpeed = assist.speed;
+    this.applySpeed(0);
+    this.player.maxHearts = assist.hearts;
+    this.player.hearts = Math.min(this.player.hearts, assist.hearts);
+    this.player.invincible = assist.invincible;
+    this.assisted ||= assist.speed < 1 || assist.hearts > MAX_HEARTS || assist.invincible;
   }
 
   dust(x, y, n) {

@@ -68,21 +68,24 @@ These values come from a working prototype and already feel good; Appendix C.2 h
 
 | Constant | Value | Notes |
 | --- | --- | --- |
-| `GRAVITY` | 900 px/s² | |
+| `GRAVITY` | 900 px/s² | while rising |
+| `FALL_GRAVITY` | 1250 px/s² | while falling: weighty, not floaty |
+| `APEX_SPEED` / `APEX_GRAVITY` | 40 px/s / ×0.5 | gravity is halved near the top of the arc while jump is held: a short hang |
 | `MAX_FALL` | 420 px/s | |
 | `RUN_SPEED` | 110 px/s | about 6.9 tiles/s |
-| `ACCEL_GROUND` / `ACCEL_AIR` | 1000 / 650 px/s² | |
-| `FRICTION` | 1400 px/s² | |
+| `ACCEL_GROUND` / `ACCEL_AIR` | 2000 / 1200 px/s² | near-instant starts and turns |
+| `FRICTION` | 2600 px/s² | stops in about 0.04 s |
 | `JUMP_SPEED` | 320 px/s | full jump about 57 px, roughly **3.5 tiles** high |
-| Jump cut | gravity ×2.5 while rising with jump released | short hop about 1.5 tiles |
+| Jump cut | releasing jump caps upward speed at 80 px/s, after at least 0.07 s of rise | short hop about 1.6 tiles |
+| `NUDGE` | 4 px | corner correction on head bumps; ledge assist when the feet clip a ledge |
 | `COYOTE_TIME` | 0.08 s | |
 | `JUMP_BUFFER` | 0.12 s | |
 | `STOMP_BOUNCE` | 220 px/s (300 if jump held) | about 1.7 / 3.1 tiles |
 | `SPRING_SPEED` | 480 px/s | about **8 tiles** high |
-| `WALL_SLIDE_MAX` | 60 px/s | from level 5 |
-| `WALL_JUMP` | vx 140 away from wall, vy 300 | input toward the wall is ignored for 0.12 s |
+| `WALL_SLIDE_MAX` | 60 px/s | from level 5; once sliding, Hop clings until he pushes away |
+| `WALL_JUMP` | vx 140 away from wall, vy 300 | the kick can't be steered for 0.12 s |
 | `WALL_COYOTE` | 0.08 s | |
-| Hitbox | 12×14 px | drawn 16×16 |
+| Hitbox | 12×14 px | drawn 16×16; enemies hurt only inside a hurtbox 2 px smaller on the sides and top |
 
 ### 3.3 Level-design metrics (derived)
 
@@ -96,7 +99,7 @@ Every level is built to these numbers. A jump that's longer than "skill" is a bu
 | Spring height | 7 tiles | 8 tiles | ≥ 9 tiles |
 | Ceiling height above a running jump | ≥ 5 tiles | 4 tiles | ≤ 2 tiles (bonks) |
 
-Full-jump air time is about 0.71 s, which covers roughly 78 px (4.9 tiles) of horizontal travel at full speed.
+Full-jump air time is about 0.75 s, which covers roughly 82 px (5.1 tiles) of horizontal travel at full speed.
 
 ### 3.4 Health, death and retry
 
