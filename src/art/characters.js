@@ -52,24 +52,24 @@ const SLIME = [
   '..kkkkkkkkkkkk..',
 ];
 const SLIME_PAL = { k: '#1e3a17', g: '#4fbf3f', l: '#a6ec8f', h: '#e4ffd8', d: '#2f8a2a', w: '#ffffff', p: '#123' };
-// Hopper: rounder, with ears and little feet, so it reads differently from a slime by shape, not just colour.
+// Hopper: the slime's body with a springy curl on top, so it still differs by shape, not just colour.
 const HOPPER = [
   '................',
   '................',
-  '...kk......kk...',
-  '...klk....klk...',
-  '....kgk..kgk....',
-  '....kkkkkkkk....',
-  '...kllhggggdk...',
-  '..klhlggggggdk..',
-  '..kggkgggkgggk..',
+  '........kkk.....',
+  '.......k..lk....',
+  '.......kl.k.....',
+  '.......kllk.....',
+  '.....klhggk.....',
+  '...kklhlgggkk...',
+  '..kglhggkgkggk..',
   '..kgggwpgwpggk..',
   '..kgggwpgwpggk..',
-  '..kggggkkggggk..',
-  '..kdgggggggggk..',
-  '...kddddddddk...',
-  '...kkk....kkk...',
-  '...kdk....kdk...',
+  '.kgggggggggggdgk',
+  '.kggggggkkgggdgk',
+  '.kdgggggggggggdk',
+  '.kddddddddddddk.',
+  '..kkkkkkkkkkkk..',
 ];
 const HOPPER_PAL = { ...SLIME_PAL, k: '#14284a', g: '#4aa3ff', l: '#a9d8ff', h: '#e6f4ff', d: '#2a6fc0' };
 
