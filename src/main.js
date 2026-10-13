@@ -11,6 +11,7 @@ import { ControlsScene } from './scenes/ControlsScene.js';
 import { AssistOptionsScene, OptionsScene } from './scenes/OptionsScene.js';
 import { applyKeys } from './input/controls.js';
 import { TouchControls } from './input/TouchControls.js';
+import { Transition } from './ui/transition.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { PlayScene } from './scenes/PlayScene.js';
 import { SelectScene } from './scenes/SelectScene.js';
@@ -53,7 +54,11 @@ followWindow(game);
 // On-screen touch controls draw on top of every scene; menus read taps from `game.touch`.
 const touch = new TouchControls(game);
 game.touch = touch;
-game.overlay = (r) => touch.render(r);
+const transition = new Transition(game);
+game.overlay = (r) => {
+  transition.render(r);
+  touch.render(r);
+};
 
 game.scenes
   .add('title', TitleScene)

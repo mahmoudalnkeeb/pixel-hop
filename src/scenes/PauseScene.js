@@ -33,8 +33,8 @@ export class PauseScene extends Scene {
 
   render(r) {
     if (this.game.scenes.current !== this) return; // options is open on top
-    r.rect(0, 0, VIEW_W, VIEW_H, 'rgba(10,10,30,0.6)');
-    label(r, 'PAUSED', VIEW_W / 2, 44, { size: 16 });
+    r.rect(0, 0, VIEW_W, VIEW_H, 'rgba(10,10,30,0.55)');
+    label(r, 'PAUSED', VIEW_W / 2, 40, { size: 16 });
     this.menu.render(r, VIEW_W / 2, 76);
   }
 }

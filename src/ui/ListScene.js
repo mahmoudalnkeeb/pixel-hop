@@ -4,6 +4,7 @@ import { loadSave, writeSave } from '../save.js';
 import { sfx } from '../sfx.js';
 import { textWidth } from './font.js';
 import { label } from './label.js';
+import { panel, pointer, selection } from './panel.js';
 
 const ROW = 12;
 const TOP = 40; // y of the first row
@@ -93,16 +94,26 @@ export class ListScene extends Scene {
 
   render(r) {
     if (this.game.scenes.current !== this) return; // a sub-menu is open on top
-    r.rect(0, 0, VIEW_W, VIEW_H, 'rgba(10,10,30,0.92)');
+    r.rect(0, 0, VIEW_W, VIEW_H, 'rgba(10,10,30,0.86)');
     label(r, this.title(), VIEW_W / 2, 14, { size: 16 });
+    const left = Math.floor(VIEW_W / 2) - 100;
+    panel(r, left, TOP - 6, 200, this.items.length * ROW + 9);
     this.items.forEach((row, i) => {
       const y = TOP + i * ROW;
-      const color = i === this.index ? '#ffd23f' : '#fff';
+      const selected = i === this.index;
+      const color = selected ? '#ffd23f' : '#fff';
+      if (selected) {
+        selection(r, left + 2, y - 2, 196, ROW - 1);
+        pointer(r, left + 2, y);
+      }
       label(r, row.name, VIEW_W / 2 - 90, y, { align: 'left', color });
       if (row.get) label(r, `< ${row.get()} >`, VIEW_W / 2 + 90, y, { align: 'right', color });
       else if (row.open) label(r, '>', VIEW_W / 2 + 90, y, { align: 'right', color });
     });
-    label(r, this.footer(), VIEW_W / 2, VIEW_H - 14, { color: '#aab' });
+    const footer = this.footer();
+    const fw = textWidth(footer) + 12;
+    panel(r, Math.floor(VIEW_W / 2 - fw / 2), VIEW_H - 18, fw, 14);
+    label(r, footer, VIEW_W / 2, VIEW_H - 15, { color: '#aab' });
   }
 }
 

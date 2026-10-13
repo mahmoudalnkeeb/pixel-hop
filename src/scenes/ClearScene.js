@@ -3,6 +3,7 @@ import { BACK, CONFIRM, VIEW_H, VIEW_W } from '../config.js';
 import { sfx } from '../sfx.js';
 import { formatTime } from '../ui/hud.js';
 import { label } from '../ui/label.js';
+import { panel } from '../ui/panel.js';
 
 const ROW = 12;
 
@@ -52,8 +53,7 @@ export class ClearScene extends Scene {
     const y = Math.round(this.panel.y);
     const cx = Math.floor(VIEW_W / 2); // whole pixel, so panel edges stay sharp on odd view widths
     r.rect(0, 0, VIEW_W, VIEW_H, 'rgba(10,10,30,0.55)');
-    r.rect(cx - 100, y + 20, 200, 140, 'rgba(20,20,45,0.92)');
-    r.strokeRect(cx - 99.5, y + 20.5, 199, 139, '#ffd23f');
+    panel(r, cx - 100, y + 20, 200, 140, { edge: '#ffd23f' });
     label(r, 'LEVEL CLEAR!', cx, y + 28, { size: 16, color: '#ffd23f' });
     label(r, s.name ?? `Level ${s.levelId}`, cx, y + 46);
     if (s.assisted) {
