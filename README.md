@@ -1,10 +1,60 @@
 # Pixel Hop
 
-**Play it:** https://mahmoudalnkeeb.github.io/pixel-hop/
+A free pixel-art platformer you can play in your browser, on desktop or phone.
 
-2D precision platformer on [h3-engine](https://github.com/mahmoudalnkeeb/h3-engine) v0.3.0 (vendored in `vendor/`). Design: `design/pixel-hop-gdd.md`.
+### ▶️ [Play it now](https://mahmoudalnkeeb.github.io/pixel-hop/)
 
-## Run
+No download, no sign-up, no ads.
+
+![Pixel Hop title screen](screenshots/01-title.png)
+
+## The story
+
+King Gloop, a bloated slime king, swallowed the Sun Seed, and the meadow of Hopshire turned grey. You play as **Hop**, a small red blob with big eyes and a bigger jump. Cross five worlds, reach the King's throne, and win the Sun Seed back.
+
+## What's in it
+
+- **10 levels in 5 worlds:** Green Hills, Bramble Woods, Crystal Caves, Cloud Ruins and Storm Keep
+- **One new idea per level:** springs, crumbling blocks, wall jumps, wind, cannons, switches and more
+- **A three-phase boss fight** against King Gloop
+- **27 hidden Sun Gems** behind fake walls, hard jumps and secret routes
+- **Fast retries:** you respawn at the last checkpoint in under a second
+- **Original chiptune music** and hand-made pixel art
+- **Assist Mode** if a section is too hard: slower game speed, extra hearts or invincibility
+- Touch controls on phones, and keys you can remap on desktop
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![World map](screenshots/02-world-map.png) | ![Green Hills](screenshots/03-green-hills.png) |
+| ![Bramble Woods](screenshots/04-bramble-woods.png) | ![Crystal Caves](screenshots/05-crystal-caves.png) |
+| ![Cloud Ruins](screenshots/06-cloud-ruins.png) | ![Storm Keep](screenshots/07-storm-keep.png) |
+| ![King Gloop](screenshots/08-king-gloop-intro.png) | ![Boss fight](screenshots/09-boss-fight.png) |
+
+## Controls
+
+| Action | Keyboard | Phone |
+| --- | --- | --- |
+| Move | ← → or A D | Thumbstick |
+| Jump (hold to jump higher) | Space, ↑, W or Z | Jump button |
+| Drop through a platform | ↓ + Jump | Down + Jump |
+| Wall jump (from level 5) | Jump while sliding on a wall | Jump button |
+| Pause | Esc or P | Pause icon |
+
+Keys can be changed under **Options → Controls**.
+
+## Built with
+
+Plain JavaScript and Canvas 2D on [h3-engine](https://github.com/mahmoudalnkeeb/h3-engine), a small game engine I also wrote. There is no build step, and all the art and music are generated in code when the game starts. The full design is in [`design/pixel-hop-gdd.md`](design/pixel-hop-gdd.md).
+
+Feedback and bug reports are welcome in [Issues](https://github.com/mahmoudalnkeeb/pixel-hop/issues).
+
+---
+
+## For developers
+
+### Run locally
 
 ```sh
 npm start            # static server on http://localhost:8080
@@ -27,11 +77,9 @@ node test/run-smoke.mjs 10 60 '' boss # scripted King Gloop phase 1
 
 Playtesting (§11): with `&debug`, press **F9** to download telemetry (deaths and time per checkpoint segment), then `node tools/telemetry-report.mjs <files>` flags segments with median deaths > 8 or time > 2× par.
 
-Touch: on-screen buttons appear on the first touch. Keys can be remapped under Options → Controls.
-
 Levels 2–10 are generated: edit `tools/build_levels.py`, run `python3 tools/build_levels.py`, then `npm run check-levels`.
 
-## Layout
+### Layout
 
 | Path | What |
 | --- | --- |
@@ -45,3 +93,4 @@ Levels 2–10 are generated: edit `tools/build_levels.py`, run `python3 tools/bu
 | `src/art/` | Pixel art painted into sprite sheets at startup (characters, per-world tiles, boss) |
 | `src/audio/` | Music/SFX/UI buses with ducking (`Mixer`), chiptune sequencer (`Jukebox`), score (`songs.js`) |
 | `levels/*.json` | Levels in the GDD §4.1 format; add new ids to `BUILT_LEVELS` in config |
+| `screenshots/` | Images used in this README |
