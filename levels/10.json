@@ -2,6 +2,7 @@
   "id": "10",
   "name": "Throne of Gloop",
   "world": 5,
+  "backdrop": "throne",
   "music": "music_drone",
   "par": 0,
   "map": [

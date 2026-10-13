@@ -130,11 +130,11 @@ export const LEVEL_NAMES = [
 
 // World palettes (§5.2): sky, ground, grass, accent.
 export const WORLDS = {
-  1: { sky: '#6ec6ff', ground: '#8a5a2b', top: '#5cc94e', accent: '#ff5e5b', far: '#a9dcf5', near: '#8fd3a8' },
-  2: { sky: '#2e4a3a', ground: '#5b4632', top: '#3f7d3a', accent: '#e0b84a', far: '#3a5a48', near: '#41634d' },
-  3: { sky: '#141625', ground: '#3b3a52', top: '#6a6890', accent: '#6fe3ff', far: '#1c1e32', near: '#25283f' },
-  4: { sky: '#ffd9a8', ground: '#e8e0f0', top: '#b7a6d6', accent: '#ff8fb1', far: '#ffe7c7', near: '#f5d6e6' },
-  5: { sky: '#2a1f3d', ground: '#4b3b5c', top: '#6d5a7e', accent: '#9be36b', far: '#33284a', near: '#3d3155' },
+  1: { sky: '#6ec6ff', ground: '#8a5a2b', top: '#5cc94e', accent: '#ff5e5b' },
+  2: { sky: '#2e4a3a', ground: '#5b4632', top: '#3f7d3a', accent: '#e0b84a' },
+  3: { sky: '#141625', ground: '#3b3a52', top: '#6a6890', accent: '#6fe3ff' },
+  4: { sky: '#ffd9a8', ground: '#e8e0f0', top: '#b7a6d6', accent: '#ff8fb1' },
+  5: { sky: '#2a1f3d', ground: '#4b3b5c', top: '#6d5a7e', accent: '#9be36b' },
 };
 
 // Controls (§3.1). Remapping replaces these arrays.

@@ -53,7 +53,7 @@ export class PlayScene extends Scene {
     const palette = WORLDS[this.def.world ?? 1];
     renderer.background = palette.sky;
 
-    this.add(new Backdrop(palette));
+    this.add(new Backdrop(this.def.backdrop ?? this.def.world ?? 1));
     this.level = this.add(new Level(this.def));
     if (this.level.unknown.size > 0) console.warn(`Level ${this.levelId}: tiles not implemented yet: ${[...this.level.unknown].join(' ')}`);
 

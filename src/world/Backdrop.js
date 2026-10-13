@@ -1,39 +1,121 @@
 import { Entity } from '../../vendor/h3-engine.min.js';
+import { backdrop, LAYER_W, PAD } from '../art/backdrops.js';
+import { VIEW_H, VIEW_W } from '../config.js';
+import { hash2 } from '../art/paint.js';
 
-// Cheap deterministic noise so scenery doesn't change between frames (Appendix C.4).
-const hash = (i) => {
-  const s = Math.sin(i * 127.1) * 43758.5453;
-  return s - Math.floor(s);
-};
+const VERTICAL = 0.5; // layers move vertically at half their horizontal parallax
+const BOX_W = VIEW_W + 32; // ambient particles wrap inside a box a little larger than the view
+const BOX_H = VIEW_H + 32;
+const AMBIENCE_COUNT = { pollen: 14, firefly: 18, mote: 24, petal: 16, rain: 70, ember: 16 };
+const FLASH_TIME = 0.35;
 
-/** Repeat a feature every `spacing` px on a layer scrolling at `factor` × the camera speed. */
-function layer(view, factor, spacing, draw) {
-  const offset = view.x * factor;
-  const first = Math.floor(offset / spacing) - 2;
-  const last = Math.ceil((offset + view.w) / spacing) + 2;
-  for (let i = first; i <= last; i++) draw(view.x + i * spacing - offset, i);
-}
+const mod = (a, n) => ((a % n) + n) % n;
 
-/** Three parallax layers at 0.1, 0.3 and 0.5 of the camera speed (§7). Placeholder shapes until world art exists. */
+/**
+ * Sky and parallax layers (§7). The sky is fixed to the screen; each layer scrolls at `f` × the
+ * camera horizontally and half that vertically, so climbing reveals more sky. Ambient particles
+ * drift at their own depth. Drawn pixel-aligned with the camera's rounded transform.
+ */
 export class Backdrop extends Entity {
-  constructor(palette) {
+  /** @param {number | string} world World number, or a named backdrop such as 'throne'. */
+  constructor(world) {
     super({ z: -10, tags: ['backdrop'] });
     this.debug = false;
-    this.palette = palette;
+    this.world = world;
+    this.t = 0;
+    this.flash = 0;
+    this.nextFlash = 3;
+    this.particles = null; // created on first update, once the kind is known
+  }
+
+  update(dt) {
+    this.t += dt;
+    const art = backdrop(this.world);
+    if (!this.particles) this.particles = this._spawn(art.ambience);
+    for (const p of this.particles) this._move(p, art.ambience, dt);
+    if (art.lightning) {
+      this.flash = Math.max(0, this.flash - dt);
+      this.nextFlash -= dt;
+      if (this.nextFlash <= 0) {
+        this.flash = FLASH_TIME;
+        this.nextFlash = 4 + Math.random() * 6;
+      }
+    }
+  }
+
+  _spawn(kind) {
+    return Array.from({ length: AMBIENCE_COUNT[kind] ?? 0 }, (_, i) => ({
+      x: hash2(i, 1) * BOX_W,
+      y: hash2(1, i) * BOX_H,
+      f: 0.6 + hash2(i, 2) * 0.35, // depth: how much it follows the camera
+      phase: hash2(i, 3) * 6.283,
+      speed: 0.6 + hash2(i, 4) * 0.8,
+    }));
+  }
+
+  _move(p, kind, dt) {
+    if (kind === 'pollen') {
+      p.x += 8 * p.speed * dt;
+      p.y += Math.sin(this.t * 1.5 + p.phase) * 6 * dt;
+    } else if (kind === 'firefly') {
+      p.x += Math.cos(this.t * 0.7 * p.speed + p.phase) * 10 * dt;
+      p.y += Math.sin(this.t * 0.9 * p.speed + p.phase * 2) * 8 * dt;
+    } else if (kind === 'mote') {
+      p.y -= 4 * p.speed * dt;
+      p.x += Math.sin(this.t + p.phase) * 3 * dt;
+    } else if (kind === 'petal') {
+      p.x -= 14 * p.speed * dt;
+      p.y += 10 * p.speed * dt;
+    } else if (kind === 'rain') {
+      p.x -= 50 * dt;
+      p.y += 240 * p.speed * dt;
+    } else if (kind === 'ember') {
+      p.y -= 12 * p.speed * dt;
+      p.x += Math.sin(this.t * 2 + p.phase) * 5 * dt;
+    }
   }
 
   render(r) {
-    const view = this.scene.camera.view;
-    const pal = this.palette;
-    const base = view.y + view.h;
-    layer(view, 0.1, 90, (wx, i) => {
-      r.circle(Math.round(wx), Math.round(view.y + 30 + hash(i) * 30), 10 + hash(i + 7) * 8, 'rgba(255,255,255,0.35)'); // clouds
-    });
-    layer(view, 0.3, 70, (wx, i) => {
-      r.circle(Math.round(wx), Math.round(base + 10), 40 + hash(i) * 30, pal.far); // far hills
-    });
-    layer(view, 0.5, 50, (wx, i) => {
-      r.circle(Math.round(wx), Math.round(base + 20), 26 + hash(i + 3) * 18, pal.near); // near hills
-    });
+    const cam = this.scene.camera;
+    const view = cam.view;
+    const art = backdrop(this.world);
+    // World position of the screen's top-left, matching Camera#apply with roundPixels.
+    const ox = -Math.round(-(cam.x + cam.shakeX)) - VIEW_W / 2;
+    const oy = -Math.round(-(cam.y + cam.shakeY)) - VIEW_H / 2;
+    // How far the camera is above the lowest it can go; layers sink by a share of this.
+    const climb = Math.max(0, this.scene.level.h - VIEW_H - view.y);
+
+    r.image(art.sky, ox, oy);
+    if (this.flash > 0) r.rect(ox, oy, VIEW_W, VIEW_H, `rgba(220,210,255,${(this.flash / FLASH_TIME) * 0.45})`);
+    for (const l of art.layers) {
+      const sink = Math.min(PAD, Math.round(climb * l.f * VERTICAL));
+      const scroll = mod(Math.round(view.x * l.f + this.t * (l.drift ?? 0)), LAYER_W);
+      for (let x = -scroll; x < VIEW_W; x += LAYER_W) r.image(l.canvas, ox + x, oy, { sy: PAD - sink, sh: VIEW_H });
+    }
+    if (this.particles) this._drawParticles(r, art.ambience, ox, oy, view);
+  }
+
+  _drawParticles(r, kind, ox, oy, view) {
+    for (const p of this.particles) {
+      const x = ox + Math.round(mod(p.x - view.x * p.f, BOX_W)) - 16;
+      const y = oy + Math.round(mod(p.y - view.y * p.f, BOX_H)) - 16;
+      if (kind === 'pollen') {
+        r.rect(x, y, 1, 1, 'rgba(255,252,220,0.8)');
+      } else if (kind === 'firefly') {
+        const on = Math.sin(this.t * 2 * p.speed + p.phase);
+        if (on < -0.2) continue;
+        r.rect(x - 1, y - 1, 3, 3, `rgba(220,255,120,${0.15 * on + 0.05})`);
+        r.rect(x, y, 1, 1, '#eaff9a');
+      } else if (kind === 'mote') {
+        const twinkle = Math.sin(this.t * 3 + p.phase) > 0.92;
+        r.rect(x, y, 1, 1, twinkle ? '#e6fbff' : 'rgba(170,160,255,0.45)');
+      } else if (kind === 'petal') {
+        r.rect(x, y, Math.sin(this.t * 4 + p.phase) > 0 ? 2 : 1, 1, 'rgba(255,190,210,0.85)');
+      } else if (kind === 'rain') {
+        for (let k = 0; k < 3; k++) r.rect(x - k, y + k * 2, 1, 2, 'rgba(160,170,230,0.35)');
+      } else if (kind === 'ember') {
+        r.rect(x, y, 1, 1, Math.sin(this.t * 5 + p.phase) > 0 ? '#ffb347' : 'rgba(255,120,40,0.6)');
+      }
+    }
   }
 }
